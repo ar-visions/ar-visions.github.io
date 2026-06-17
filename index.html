@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>silver — a native build language</title>
+<meta name="description" content="silver is a native, LLVM-backed systems language with live reload, a git-native import system that builds any dependency's own build system, and zero-binding C/C++ interop. MIT licensed, 8 years in development.">
+<meta property="og:title" content="silver — a native build language">
+<meta property="og:description" content="LLVM-backed systems language with live reload, git-native imports, and zero-binding C/C++ interop. MIT, self-hosting, in development since 2017.">
+<meta property="og:type" content="website">
+<link rel="icon" href="silver-icon.png">
+<style>
+  :root {
+    --bg:#0b0d10; --bg2:#111419; --panel:#14181e; --line:#222831;
+    --fg:#e7ecf2; --mut:#97a3b2; --dim:#6c7787;
+    --ag:#c9d4e3;            /* silver text */
+    --acc:#7fb0ff; --acc2:#9b8cff;
+    --k:#7fb0ff; --t:#5fd6b5; --s:#e3b778; --c:#5c6675; --n:#d98ad1; --fn:#e7ecf2;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:var(--sans); line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a { color:var(--acc); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .wrap { max-width:980px; margin:0 auto; padding:0 24px; }
+
+  /* hero */
+  header.hero {
+    position:relative; overflow:hidden;
+    padding:96px 0 64px;
+    background:
+      radial-gradient(1100px 500px at 70% -10%, rgba(127,176,255,.10), transparent 60%),
+      radial-gradient(900px 500px at 10% 0%, rgba(155,140,255,.08), transparent 55%);
+    border-bottom:1px solid var(--line);
+  }
+  .hero-bg {
+    position:absolute; inset:0; z-index:0;
+    background:url("silver-icon.png") no-repeat center right;
+    background-size:cover; opacity:.9;
+    transform:translateX(20%);
+  }
+  .hero-bg::after {
+    content:""; position:absolute; inset:0;
+    background:
+      linear-gradient(90deg, var(--bg) 3%, rgba(11,13,16,.62) 42%, rgba(11,13,16,0) 82%),
+      linear-gradient(0deg, var(--bg) 1%, rgba(11,13,16,0) 38%),
+      linear-gradient(180deg, var(--bg) 0%, rgba(11,13,16,0) 32%);
+  }
+  header.hero > .wrap { position:relative; z-index:1; }
+  .hero-quote {
+    position:absolute; top:0; right:0; z-index:3;
+    white-space:nowrap;
+    font-family:var(--mono); font-style:italic; font-size:14px; line-height:1.5;
+    color:var(--ag);
+    padding:12px 18px;
+    background:linear-gradient(180deg, rgba(20,24,30,.62), rgba(14,18,24,.5));
+    border:1px solid var(--line); border-right:2px solid var(--acc);
+    border-radius:12px;
+    backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px);
+    box-shadow:0 12px 32px rgba(0,0,0,.38);
+  }
+  .hero-quote b { color:#fff; font-style:normal; }
+  .hero-quote::before { content:"\201C"; color:var(--acc); font-size:20px;
+    vertical-align:-3px; margin-right:3px; opacity:.85; }
+  .mark { display:flex; align-items:center; gap:16px; margin-bottom:28px; }
+  .mark img { width:54px; height:54px; border-radius:12px; }
+  .wordmark {
+    font-size:30px; font-weight:700; letter-spacing:-.5px;
+    background:linear-gradient(180deg,#fff,#aab6c6);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .wordmark span { font-family:var(--mono); font-weight:600; font-size:15px;
+    -webkit-text-fill-color:var(--dim); margin-left:8px; }
+  h1 {
+    font-size:clamp(34px,5.4vw,56px); line-height:1.08; letter-spacing:-1.2px;
+    margin:0 0 18px; font-weight:760; max-width:18ch;
+  }
+  h1 .g { background:linear-gradient(120deg,#cdd8e8,#7fb0ff 60%,#9b8cff);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  h1 .kw { font-family:var(--mono); color:var(--k); font-weight:600;
+    font-size:.74em; background:var(--panel); border:1px solid var(--line);
+    padding:.06em .34em; border-radius:8px; vertical-align:.06em; }
+  .lede { font-size:19px; color:var(--mut); max-width:62ch; margin:0 0 30px;
+    text-shadow:2px 2px 4px rgba(0,0,0,.7); }
+  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:32px; }
+  .badge {
+    font-family:var(--mono); font-size:12.5px; color:var(--ag);
+    background:var(--panel); border:1px solid var(--line);
+    padding:5px 11px; border-radius:999px;
+  }
+  .badge b { color:#fff; font-weight:600; }
+  .cta { display:flex; flex-wrap:wrap; gap:12px; }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    font-weight:600; font-size:15px; padding:12px 20px; border-radius:10px;
+    border:1px solid var(--line);
+  }
+  .btn.primary { background:linear-gradient(180deg,#3b6fd4,#2f59b0); color:#fff; border-color:#3b6fd4; }
+  .btn.primary:hover { text-decoration:none; filter:brightness(1.07); }
+  .btn.ghost { background:var(--panel); color:var(--fg); }
+  .btn.ghost:hover { text-decoration:none; border-color:#33404e; }
+
+  /* sections */
+  section { padding:72px 0; border-bottom:1px solid var(--line); }
+  .eyebrow { font-family:var(--mono); font-size:12.5px; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--acc); margin:0 0 10px; }
+  h2 { font-size:clamp(26px,3.6vw,34px); letter-spacing:-.6px; margin:0 0 14px; }
+  h2 code { color:var(--k); font-family:var(--mono); font-weight:600; font-size:.74em;
+    background:var(--panel); border:1px solid var(--line); padding:.05em .32em; border-radius:8px; }
+  .sub { color:var(--mut); font-size:17px; max-width:64ch; margin:0 0 36px; }
+
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
+  .trio { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:28px; }
+  .card {
+    background:linear-gradient(180deg,var(--panel),var(--bg2));
+    border:1px solid var(--line); border-radius:14px; padding:24px;
+  }
+  .card h3 { margin:0 0 8px; font-size:18px; letter-spacing:-.3px; }
+  .card h3 .ic { color:var(--acc); font-family:var(--mono); margin-right:8px; }
+  .card p { margin:0; color:var(--mut); font-size:15px; }
+
+  /* code */
+  .code {
+    background:#0c0f13; border:1px solid var(--line); border-radius:14px;
+    overflow:hidden; margin:0 0 20px;
+  }
+  .code .bar {
+    display:flex; align-items:center; gap:8px; padding:11px 16px;
+    border-bottom:1px solid var(--line); background:#0a0c10;
+  }
+  .code .bar .dot { width:11px; height:11px; border-radius:50%; background:#2a323d; }
+  .code .bar .name { font-family:var(--mono); font-size:12.5px; color:var(--dim); margin-left:6px; }
+  pre { margin:0; padding:20px 22px; overflow-x:auto; }
+  code, pre { font-family:var(--mono); font-size:13.5px; line-height:1.7; }
+  pre .k { color:var(--k); }    /* keyword */
+  pre .t { color:var(--t); }    /* type */
+  pre .s { color:var(--s); }    /* string */
+  pre .c { color:var(--c); font-style:italic; }  /* comment */
+  pre .n { color:var(--n); }    /* number */
+  pre .f { color:var(--fn); }   /* function */
+  pre .m { color:var(--mut); }  /* muted/punct */
+
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  .two .txt h3 { font-size:20px; margin:0 0 10px; letter-spacing:-.3px; }
+  .two .txt h3 code { font-size:1em; color:var(--k); }
+  .two .txt p { color:var(--mut); margin:0 0 14px; font-size:15.5px; }
+
+  /* built-with */
+  .builtwith { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .bw {
+    border:1px solid var(--line); border-radius:14px; padding:22px;
+    background:linear-gradient(180deg,var(--panel),var(--bg2));
+  }
+  .bw h3 { margin:0 0 6px; font-size:18px; }
+  .bw .tag { font-family:var(--mono); font-size:12px; color:var(--acc); }
+  .bw p { color:var(--mut); font-size:14.5px; margin:8px 0 0; }
+
+  /* stats strip */
+  section.docker {
+    background:
+      radial-gradient(820px 380px at 80% 26%, rgba(127,176,255,.15), transparent 60%),
+      linear-gradient(180deg,#0c1016,#0b0d10);
+  }
+  .whale { width:100%; max-width:400px; height:auto; display:block; margin:8px auto 0;
+    filter:drop-shadow(0 16px 38px rgba(127,176,255,.22)); }
+  .module { position:relative; width:100%; max-width:340px; margin:0 auto; }
+  .module img { width:100%; display:block;
+    filter:drop-shadow(0 18px 42px rgba(127,176,255,.34)); }
+  .module-chips {
+    position:absolute; left:11%; right:9%; top:35%; bottom:19%;
+    display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:7px;
+  }
+  .module-chips span {
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:13px; font-weight:600; color:#eaf3ff;
+    background:rgba(8,16,28,.52); border:1px solid rgba(255,255,255,.45);
+    border-radius:6px;
+  }
+  .plat-cap { font-family:var(--mono); font-size:12px; letter-spacing:1px; text-transform:uppercase;
+    color:var(--dim); margin:26px 0 10px; }
+  .plats { display:flex; flex-wrap:wrap; gap:9px; }
+  .plat { font-family:var(--mono); font-size:13px; color:var(--ag); background:var(--panel);
+    border:1px solid var(--line); padding:7px 13px; border-radius:10px; }
+  .plat b { color:#fff; font-weight:600; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; text-align:center; }
+  .stat .num { font-size:34px; font-weight:730; letter-spacing:-1px;
+    background:linear-gradient(180deg,#fff,#9fb0c4); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  .stat .lab { color:var(--mut); font-size:13.5px; margin-top:4px; }
+
+  footer { padding:54px 0 70px; color:var(--dim); font-size:14px; }
+  footer .row { display:flex; flex-wrap:wrap; gap:18px 28px; align-items:center; justify-content:space-between; }
+  footer a { color:var(--mut); }
+
+  .more { margin-top:16px; display:inline-block; background:none; border:none; padding:0;
+    cursor:pointer; font-family:var(--sans); font-size:14px; font-weight:600; color:var(--acc); }
+  .more:hover { text-decoration:underline; }
+  dialog.sheet { inset:0; width:100%; height:100%; max-width:100%; max-height:100%;
+    border:none; background:transparent; padding:0; }
+  dialog.sheet[open] { display:grid; place-items:center; }
+  dialog.sheet::backdrop { background:rgba(4,6,9,.66); backdrop-filter:blur(4px); }
+  .sheet-in { position:relative; width:min(720px,92vw); max-height:86vh; overflow:auto;
+    color:var(--fg);
+    background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line);
+    border-radius:16px; padding:32px 32px 36px; box-shadow:0 30px 90px rgba(0,0,0,.55); }
+  .sheet-in code { color:var(--ag); }
+  .sheet-x { position:absolute; top:10px; right:16px; background:none; border:none; cursor:pointer;
+    color:var(--mut); font-size:26px; line-height:1; }
+  .sheet-x:hover { color:#fff; }
+  .sheet-in h3 { font-size:23px; letter-spacing:-.3px; margin:4px 0 14px; color:#fff; }
+  .sheet-in h4 { font-size:15px; margin:22px 0 8px; color:#fff; }
+  .sheet-in p { color:var(--mut); font-size:15px; margin:0 0 12px; }
+  .sheet-in .code { margin:12px 0; }
+  @media (max-width:720px){
+    .grid,.two,.builtwith,.trio { grid-template-columns:1fr; }
+    .hero-quote { position:static; white-space:normal; max-width:none; text-align:left; margin:0 0 24px;
+      border-right:1px solid var(--line); border-left:2px solid var(--acc); }
+    .stats { grid-template-columns:repeat(2,1fr); gap:28px 18px; }
+    header.hero { padding:64px 0 48px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-bg"></div>
+  <div class="wrap">
+    <div class="hero-quote">the application <b>is</b> the IDE&rdquo;</div>
+    <div class="mark">
+      <div class="wordmark">silver <span>v0.88</span></div>
+    </div>
+    <h1>A native build language whose <code class="kw">import</code> is <span class="g">open to the world</span>.</h1>
+    <p class="lede">
+      silver compiles <code>.ag</code> source to native binaries through LLVM. One import line clones a
+      dependency, detects <em>its own</em> build system, builds it, and links the result — then live-reloads
+      your running app on every save, with full debugger support on every platform.
+    </p>
+    <div class="badges">
+      <span class="badge"><b>8 years</b> in research</span>
+      <span class="badge"><b>~80k</b> lines</span>
+      <span class="badge"><b>LLVM</b> backend</span>
+      <span class="badge"><b>self-hosting</b> IDE</span>
+      <span class="badge"><b>MIT</b> license</span>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/ar-visions/silver">View on GitHub →</a>
+      <a class="btn ghost" href="#features">What it does</a>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <p class="eyebrow">Why it's different</p>
+    <h2>An isolated environment, filled with best practice.</h2>
+    <p class="sub">No package manager, no binding layer, no vtable tax you didn't ask for, and no platform
+      where the debugger goes dark. The whole ecosystem — from LLVM down to the Au runtime — builds from
+      source in isolation, into one self-contained folder that never touches your system, and your
+      cross-platform apps build from that same SDK.</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">import</span>Direct from authors</h3>
+        <p>Write <code>import owner:repo/commit</code>. silver clones it, detects CMake, Meson, Cargo, GN,
+          or autotools, builds it with that project's own tools, and links the output. C headers are parsed
+          through libclang and made available at design time.</p>
+        <button class="more" data-sheet="sheet-import">Read more →</button>
+      </div>
+      <div class="card">
+        <h3><span class="ic">↻</span>Live reload, built into the app</h3>
+        <p>The source watcher is compiled into the binaries themselves — not bolted onto an editor. Every
+          silver app can watch its own source and rebuild in place, whether you're developing it or it's been
+          installed into <code>share</code>. Edit, save, and the app hot-reloads its main module through a
+          built-in host — no script, no separate binary, not even a window reload. The same Vulkan session
+          stays live while your application module swaps underneath it.</p>
+        <button class="more" data-sheet="sheet-live">Read more →</button>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⚙</span>Debug, test, profile — built in</h3>
+        <p>Every build emits full LLDB debug info — source maps, variable inspection, stepping, breakpoints —
+          on Linux, macOS, Windows, and embedded ARM from one source tree. Mark a function
+          <code>expect func</code> and the test compiles into the module itself, with built-in coverage
+          mapping and nanosecond timing reports.</p>
+        <button class="more" data-sheet="sheet-debug">Read more →</button>
+      </div>
+      <div class="card">
+        <h3><span class="ic">↔</span>C/C++ with no bindings</h3>
+        <p>Declare a function in silver, implement it in a <code>.c</code> or <code>.cc</code> file beside it.
+          It compiles and links automatically with full access to your fields. The shared object model — Au —
+          serves C, C++, and silver equally.</p>
+        <button class="more" data-sheet="sheet-interop">Read more →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">The module</p>
+    <h2>One module, many languages.</h2>
+    <div class="two" style="align-items:center;">
+      <div>
+        <div class="module">
+          <img src="folder.png" alt="a silver module — a folder of source and resources">
+          <div class="module-chips">
+            <span>.ag</span>
+            <span>.c</span>
+            <span>.cc</span>
+            <span>glsl</span>
+            <span>css</span>
+            <span>png</span>
+          </div>
+        </div>
+      </div>
+      <div class="txt">
+        <p>A silver module is a directory. Inside it: the <code>.ag</code> source, its <code>.c</code> and
+          <code>.cc</code> companions, the shaders, the stylesheet, the assets — built and versioned as a
+          single unit. Several languages and their resources, bound into one importable thing.</p>
+        <p>It's a simple idea almost nothing else does: the module is its silver source — the <code>.ag</code>
+          file — together with companion source in C, C++, GLSL, and beyond, imported by name and built for
+          you in full.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">The import system</p>
+    <h2><code>import</code> Built the way the authors intend.</h2>
+    <p class="sub">Decentralized by design — depend on a commit or branch for deterministic builds. No
+      insecure supply-chain. Go direct to the software people.</p>
+    <div class="code">
+      <div class="bar"><span class="dot"></span><span class="name">app.ag</span></div>
+<pre><span class="k">import</span> KhronosGroup<span class="m">:</span>Vulkan-Headers<span class="m">/</span><span class="n">29184b9</span>
+<span class="k">import</span> glfw<span class="m">:</span>glfw<span class="m">/</span><span class="n">fdd14e6</span> <span class="t">&lt;GLFW/glfw3.h&gt;</span>
+    <span class="m">+</span>GLFW_INCLUDE_VULKAN
+
+<span class="k">import</span> madler<span class="m">:</span>zlib<span class="m">/</span><span class="n">51b7f2a</span> <span class="t">&lt;zlib.h&gt;</span>
+    <span class="m">-</span>DCMAKE_POLICY_VERSION_MINIMUM<span class="m">=</span><span class="n">3.5</span>
+
+<span class="c"># C headers, too — macros and types available at design time</span>
+<span class="k">import</span> <span class="t">&lt;stdio.h&gt;</span></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Interoperability</p>
+    <h2>C and C++, sharing one object model.</h2>
+    <p class="sub">There is no binding layer because there is nothing to bind. silver, C, and C++ meet inside
+      a single C runtime — <strong>Au</strong> — where every type is described by one schema node.</p>
+
+    <div class="two">
+      <div class="txt">
+        <h3>Everything is an <code>Au_t</code></h3>
+        <p>One type descriptor stands behind all of it — structs, classes, enums, and each of their members.
+          An <code>Au_t</code> holds a type's members, methods, vtable, size, and traits. Reflection, reference
+          counting, and single inheritance come from the runtime, not from each language separately.</p>
+        <h3>The schema node</h3>
+        <p>A type is declared once as a schema — its members, methods, overrides, and constructors — and that
+          schema produces the same <code>Au_t</code> whether the type was written in silver or in C. The object
+          layout is identical, so a field is the same field on either side.</p>
+        <h3>Imported at design time</h3>
+        <p>C and C++ headers are read through libclang as you build. Their macros, structs, and functions become
+          <code>Au_t</code> nodes too — a Vulkan handle or a zlib struct is a first-class participant in your
+          program, not a foreign object reached through a wrapper.</p>
+      </div>
+      <div class="code">
+        <div class="bar"><span class="dot"></span><span class="name">image.ag  +  image.c</span></div>
+<pre><span class="c"># image.ag — declare in silver, leave the body out</span>
+<span class="k">class</span> <span class="t">image</span>
+    <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
+    <span class="k">public</span> w<span class="m">:</span> <span class="t">i32</span>
+    <span class="k">public</span> h<span class="m">:</span> <span class="t">i32</span>
+    <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>
+
+<span class="c">// image.c — implement in C, with full field access</span>
+<span class="t">none</span> <span class="f">image_decode</span>(<span class="t">image</span> self) <span class="m">{</span>
+    FILE* f <span class="m">=</span> fopen(self<span class="m">-&gt;</span>uri<span class="m">-&gt;</span>chars, <span class="s">"rb"</span>);
+    <span class="c">// self-&gt;w and self-&gt;h are the same fields silver sees</span>
+    <span class="m">...</span>
+<span class="m">}</span>
+
+<span class="c"># no wrappers, no bindings, no marshalling — it just links</span></pre>
+      </div>
+    </div>
+
+    <div class="trio">
+      <div class="card">
+        <h3><span class="ic">Au_t</span>One descriptor</h3>
+        <p>Structs, classes, enums, and their members are all the same node. Learn one model, not three.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">{ }</span>One schema</h3>
+        <p>The schema generates the C struct and the silver type with one identical layout — so there's no
+          marshalling at the boundary. A field is the same field on both sides.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">&lt; &gt;</span>One namespace</h3>
+        <p>Imported C and C++ types are first-class at design time — reflected through libclang, not wrapped.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="docker">
+  <div class="wrap">
+    <p class="eyebrow">Cross-platform · Docker integrated</p>
+    <div class="two" style="align-items:center;">
+      <div class="txt">
+        <h2 style="margin-top:0;">The compiler ships Docker inside it.</h2>
+        <p>Cross-compiling is usually a fragile pile of toolchains. silver folds Docker into the compiler
+          itself: name a target and it builds a per-platform image from that platform's Dockerfile, then runs
+          the <em>entire</em> build inside the container — your dependencies' CMake, Meson, GN, and autotools,
+          then <code>llc</code>, <code>clang</code>, and the final link — against that platform's SDK.</p>
+        <p>You never touch a container. silver builds the image if it's missing, mounts the SDK, and even
+          negotiates docker permissions on its own. One command, any target:</p>
+        <div class="code" style="margin-top:14px;">
+          <div class="bar"><span class="dot"></span><span class="name">shell</span></div>
+<pre><span class="m">$</span> silver orbiter <span class="k">--platform</span> linux-aarch64
+<span class="c"># → builds the image, compiles + links inside it, emits an arm64 binary</span></pre>
+        </div>
+      </div>
+      <div>
+        <svg class="whale" viewBox="0 0 24 24" role="img" aria-label="Docker" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#dde6f2"/>
+              <stop offset=".55" stop-color="#7fb0ff"/>
+              <stop offset="1" stop-color="#9b8cff"/>
+            </linearGradient>
+          </defs>
+          <path fill="url(#wg)" d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/>
+        </svg>
+      </div>
+    </div>
+
+    <p class="plat-cap">Platforms</p>
+    <div class="plats">
+      <span class="plat">macOS</span>
+      <span class="plat">iOS</span>
+      <span class="plat">Linux</span>
+      <span class="plat">Android</span>
+      <span class="plat">Windows</span>
+      <span class="plat">NVIDIA Jetson</span>
+    </div>
+    <p class="plat-cap">Architectures</p>
+    <div class="plats">
+      <span class="plat">x86_64</span>
+      <span class="plat">x86</span>
+      <span class="plat">arm64</span>
+      <span class="plat">arm32</span>
+      <span class="plat">mips</span>
+      <span class="plat">riscv64</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="two">
+      <div class="txt">
+        <p class="eyebrow">The language</p>
+        <h2>Succinct and explicit.</h2>
+        <h3>Polymorphism you opt into</h3>
+        <p>Calls are direct by default — a static call with zero vtable overhead, so LLVM can inline,
+          const-propagate, and auto-vectorize across the boundary. When you want dynamic dispatch, you ask
+          for it with <code>*</code>. The cost is visible exactly where you pay it.</p>
+        <h3>Units as types, shapes as literals</h3>
+        <p><code>200px</code> and <code>200em</code> are distinct types with compile-time conversions.
+          <code>new f32 [32x32x1]</code> allocates a typed tensor. Built for graphics, DSP, and neural nets.</p>
+      </div>
+      <div class="code">
+        <div class="bar"><span class="dot"></span><span class="name">trinity.ag</span></div>
+<pre><span class="c"># trinity's base app — the hot-reloaded module subclasses this</span>
+<span class="k">abstract</span> <span class="t">live_app</span> <span class="t">media_app</span>
+    <span class="k">context</span> w           <span class="m">:</span> <span class="t">Display*</span>     <span class="c"># bound from scope; '*' = any subtype</span>
+    <span class="k">context</span> vk          <span class="m">:</span> <span class="t">vk_context</span>   <span class="c"># the renderer, never passed in</span>
+    <span class="k">intern</span>  frames      <span class="m">:</span> <span class="t">i32</span>
+    <span class="k">intern</span>  next_second <span class="m">:</span> <span class="t">i64</span>
+    <span class="k">public</span>  width       <span class="m">:</span> <span class="t">i32</span>
+
+    <span class="k">func</span> <span class="f">frame</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">bool</span>
+        <span class="f">glfwPollEvents</span> <span class="m">[</span> <span class="m">]</span>
+        second <span class="m">:</span> <span class="f">epoch_millis</span> <span class="m">[</span> <span class="m">]</span> <span class="m">/</span> <span class="n">1000</span>
+        <span class="k">if</span> <span class="m">[</span> next_second <span class="m">!=</span> second <span class="m">]</span>
+            next_second <span class="m">=</span> second
+            <span class="f">puts</span> <span class="s">'fps={frames} draw={vk.draw_us}us'</span>
+            frames <span class="m">=</span> <span class="n">0</span>
+        <span class="f">render</span><span class="k">*</span><span class="m">[</span> <span class="m">]</span>                  <span class="c"># explicit dynamic dispatch</span>
+        <span class="k">return</span> !<span class="f">glfwWindowShouldClose</span> <span class="m">[</span> w.glfw <span class="m">]</span>
+
+    <span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span>                   <span class="c"># overridden by the live subclass</span>
+        <span class="k">return</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Member access</p>
+    <h2>Less to pass around.</h2>
+    <p class="sub">Visibility and context are part of the type, not an afterthought — so the compiler threads
+      the right data to the right place and keeps modules honest.</p>
+
+    <div class="two">
+      <div class="txt">
+        <h3><code>context</code> — bound from scope, by type</h3>
+        <p>A context member binds automatically to a value of its type already in scope — the Vulkan context,
+          the active window, the allocator. Declared once, present wherever it's needed, and never threaded
+          through every call in between. It's implicit integration of contextual data, and you can always
+          override it explicitly. Less to pass around, more to read.</p>
+        <h3><code>intern</code> — visible to the whole module</h3>
+        <p>An intern member is internal to the entire <em>module</em>, not just its class — so collaborating
+          types share state without exporting it. That's dependency isolation at the module boundary, and it
+          removes the need for <code>friend</code>-style escape hatches.</p>
+        <h3><code>require</code> — the user must provide it</h3>
+        <p>A require member is part of the public surface, but the compiler won't let an instance exist
+          without it. Omit it at construction and the build fails, naming exactly what's missing —
+          configuration errors caught at compile time, not at runtime. Context members are required the
+          same way.</p>
+      </div>
+      <div class="code">
+        <div class="bar"><span class="dot"></span><span class="name">element.ag</span></div>
+<pre><span class="k">class</span> <span class="t">element</span>
+    <span class="k">context</span> vk  <span class="m">:</span> <span class="t">vk_context</span>   <span class="c"># bound from scope, by type</span>
+    <span class="k">context</span> ux  <span class="m">:</span> <span class="t">Window</span>       <span class="c"># never passed in</span>
+    <span class="k">intern</span>  fd  <span class="m">:</span> <span class="t">i32</span> <span class="n">-1</span>      <span class="c"># module-visible, not exported</span>
+    <span class="k">require</span> uri <span class="m">:</span> <span class="t">path</span>         <span class="c"># the user must provide this</span>
+    <span class="k">public</span>  id  <span class="m">:</span> <span class="t">string</span>       <span class="c"># part of the public surface</span>
+
+    <span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span>
+        vk.<span class="f">begin</span> <span class="m">[</span> <span class="m">]</span>            <span class="c"># vk is simply here</span>
+        ux.<span class="f">invalidate</span> <span class="m">[</span> <span class="m">]</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Built in silver</p>
+    <h2>It compiles its own tools.</h2>
+    <p class="sub">About a quarter of the codebase — the IDE and the renderer — is written in silver itself.
+      The strongest test of a language is whether you'd build something real in it.</p>
+    <div class="builtwith">
+      <div class="bw">
+        <span class="tag">IDE</span>
+        <h3>orbiter</h3>
+        <p>The development environment for silver, written in silver, running on the trinity engine —
+          editing and live-reloading itself.</p>
+      </div>
+      <div class="bw">
+        <span class="tag">ENGINE</span>
+        <h3>trinity</h3>
+        <p>A Vulkan-based composition and SDF compute-canvas — the rendering foundation orbiter is built on.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">trinity engine</p>
+    <h2>Declarative UX, CSS with your properties.</h2>
+    <p class="sub">orbiter — the IDE — is built on trinity: a Vulkan composition engine whose canvas rasterizes
+      vector shapes as signed-distance fields on the compute pipeline. The entire interface is described in a
+      CSS dialect, with layers, transitions, and filters built into the language of the stylesheet.</p>
+
+    <div class="two">
+      <div class="txt">
+        <h3>SDF canvas on Vulkan compute</h3>
+        <p>Rounded rects, paths, and strokes are evaluated as signed-distance fields by a compute shader and
+          written to a storage image, then composited. Crisp at any scale, antialiased for free, and resident
+          on the GPU — no CPU rasterizer in the loop.</p>
+        <h3>Layers, not element trees</h3>
+        <p>A single element carries named render layers — <code>layers.base</code>, <code>layers.inner</code>,
+          <code>layers.border</code> — each with its own area, fill, stroke, and glow. One element does the
+          work of a whole nested subtree, so there's far less for you to declare.</p>
+        <h3>Transitions &amp; low-pass, in the CSS</h3>
+        <p>A property animates by appending its timing: <code>fill_color: #4af, 222ms cubic</code>. Dynamic
+          shader inputs are smoothed by a low-pass filter the same way — <code>pulse_width: 1.0, filter
+          0.8</code>. Motion and signal-smoothing are declarative, never wired up by hand.</p>
+      </div>
+      <div class="code">
+        <div class="bar"><span class="dot"></span><span class="name">orbiter.css</span></div>
+<pre><span class="c">/* one element, several visual layers — not a tree */</span>
+<span class="t">Group / Check</span> {
+    <span class="k">layers.base</span>:
+        area:         l0.5 t0.5 w1.0 h1.0
+        fill_color:   <span class="s">#0004</span>
+        stroke_color: <span class="s">#fff4</span>
+        radius:       <span class="n">9</span>
+    <span class="k">layers.inner</span>:
+        fill_color:   <span class="s">#4af0</span>, <span class="n">222ms cubic</span>   <span class="c">/* transition */</span>
+        inner_glow:   <span class="s">#fff0</span> 8, <span class="n">222ms cubic</span>
+
+<span class="t">:selected</span>
+    <span class="k">layers.inner</span>:
+        fill_color:   <span class="s">#4af</span>,  <span class="n">222ms cubic</span>
+        stroke_color: <span class="s">#fff8</span>
+}</pre>
+      </div>
+    </div>
+
+    <p class="plat-cap">And the elements themselves — one expression</p>
+    <div class="code">
+      <div class="bar"><span class="dot"></span><span class="name">orbiter.ag</span></div>
+<pre><span class="c"># the whole finder bar — a single declarative expression</span>
+<span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">Elements</span> <span class="m">[</span>
+    find<span class="m">:</span>    <span class="t">element</span> <span class="m">[</span> label<span class="m">:</span> <span class="s">'Find'</span>,    edit<span class="m">:</span> findbar_text <span class="m">]</span>
+    replace<span class="m">:</span> <span class="t">element</span> <span class="m">[</span> label<span class="m">:</span> <span class="s">'Replace'</span>, edit<span class="m">:</span> replace_text <span class="m">]</span>
+    pattern<span class="m">:</span> <span class="t">Option</span>  <span class="m">[</span> label<span class="m">:</span> <span class="s">'Files'</span>,   selected<span class="m">:</span> files_sel <span class="m">]</span>
+    nav<span class="m">:</span>     <span class="t">element</span> <span class="m">[</span> topmost<span class="m">:</span> <span class="k">true</span>,    elements<span class="m">:</span> nav <span class="m">]</span>
+<span class="m">]</span></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><div class="num">2017</div><div class="lab">first commit</div></div>
+      <div class="stat"><div class="num">~80k</div><div class="lab">lines of code</div></div>
+      <div class="stat"><div class="num">~27k</div><div class="lab">written in silver</div></div>
+      <div class="stat"><div class="num">4</div><div class="lab">platforms targeted</div></div>
+    </div>
+  </div>
+</section>
+
+<section style="border-bottom:none;">
+  <div class="wrap" style="text-align:center;">
+    <h2>Read the source.</h2>
+    <p class="sub" style="margin:0 auto 28px;">An LLVM-backed compiler written in C, a Python build pipeline,
+      and the language compiling itself. MIT licensed.</p>
+    <div class="cta" style="justify-content:center;">
+      <a class="btn primary" href="https://github.com/ar-visions/silver">github.com/ar-visions/silver →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <div>silver — a native build language · MIT License · © 2017 Kalen Novis White</div>
+      <div class="row" style="gap:18px;">
+        <a href="https://github.com/ar-visions/silver">silver</a>
+        <a href="https://github.com/ar-visions/orbiter">orbiter</a>
+        <a href="https://github.com/ar-visions/hyperspace">hyperspace</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<dialog id="sheet-import" class="sheet">
+  <div class="sheet-in">
+    <button class="sheet-x" aria-label="Close">&times;</button>
+    <p class="eyebrow">import</p>
+    <h3>One keyword, every source.</h3>
+    <p><code>import</code> resolves a dependency, builds it from source, and brings its types into scope. It
+      has a handful of forms — all of them build, none of them pull a prebuilt binary.</p>
+
+    <h4>The forms</h4>
+    <div class="code"><pre><span class="k">import</span> img                          <span class="c"># local silver module</span>
+<span class="k">import</span> madler<span class="m">:</span>zlib<span class="m">/</span><span class="n">51b7f2a</span> <span class="t">&lt;zlib.h&gt;</span>   <span class="c"># owner:project/commit + C header</span>
+<span class="k">import</span> KhronosGroup<span class="m">:</span>Vulkan-Headers<span class="m">/</span><span class="n">29184b9</span>
+<span class="k">import</span> numpy <span class="k">as</span> np                  <span class="c"># namespaced</span>
+<span class="k">import</span> <span class="t">&lt;stdio.h&gt;</span>                    <span class="c"># a C header alone</span></pre></div>
+
+    <h4>From anywhere — <code>from</code></h4>
+    <p>By default an import resolves against your own git service and owner. <code>from</code> overrides that,
+      pointing import at any service or URL — the rest of the line behaves the same.</p>
+    <div class="code"><pre><span class="k">import</span> mylib <span class="k">from</span> https<span class="m">:</span>//gitlab.com/team/mylib<span class="m">/</span><span class="n">a1b2c3d</span></pre></div>
+
+    <h4>It detects the build system</h4>
+    <p>silver clones the repo, recognizes its build — CMake, Meson, Cargo, GN, or autotools — runs it with
+      that project's own tools, and links the result. C and C++ headers are parsed through libclang and made
+      available at design time, macros included.</p>
+
+    <h4>silver + C + C++, one module</h4>
+    <p>A module's <code>.ag</code> source compiles alongside its <code>.c</code> and <code>.cc</code>
+      companions. Declare a function in silver with no body, implement it in C — they share the Au object
+      layout, so there are no wrappers and nothing to marshal.</p>
+    <div class="code"><pre><span class="k">class</span> <span class="t">image</span>
+    <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
+    <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>      <span class="c"># body lives in image.c</span></pre></div>
+
+    <h4>Imports take parameters</h4>
+    <p>Module-scope members are configuration inputs, set by the importer:</p>
+    <div class="code"><pre><span class="k">import</span> mymodule
+    debug<span class="m">:</span>   <span class="k">true</span>
+    version<span class="m">:</span> <span class="s">"1.0"</span></pre></div>
+  </div>
+</dialog>
+
+<dialog id="sheet-live" class="sheet">
+  <div class="sheet-in">
+    <button class="sheet-x" aria-label="Close">&times;</button>
+    <p class="eyebrow">live reload</p>
+    <h3>The watcher ships in the binary.</h3>
+    <p>Run a project in watch mode and silver keeps an eye on its source. On save it recompiles only the
+      changed module, loads the new code, and hands control back — the window and the Vulkan session never
+      tear down.</p>
+    <div class="code"><pre><span class="m">$</span> silver orbiter <span class="k">--watch</span></pre></div>
+    <h4>What persists</h4>
+    <p>A built-in host holds long-lived state — the Vulkan context, caches, your app object — across the swap.
+      Only the application module's code is replaced underneath it, so a reload costs a frame, not a restart.
+      Installed apps under <code>share</code> watch their own source the same way.</p>
+  </div>
+</dialog>
+
+<dialog id="sheet-debug" class="sheet">
+  <div class="sheet-in">
+    <button class="sheet-x" aria-label="Close">&times;</button>
+    <p class="eyebrow">debug · test · profile</p>
+    <h3>Instrumented by default.</h3>
+    <p>Debug is the default build. Every binary carries full LLDB information — source maps, stepping,
+      breakpoints, variable inspection — on every platform from one source tree.</p>
+    <h4>Tests live in the module</h4>
+    <p>Mark a function <code>expect func</code> and it becomes a test the compiler verifies returns true. No
+      separate harness — it compiles in, with coverage mapping and nanosecond timing reported per run.</p>
+    <div class="code"><pre><span class="k">expect func</span> <span class="f">math_ok</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">bool</span>
+    <span class="k">return</span> <span class="f">add</span> <span class="m">[</span> <span class="n">2</span>, <span class="n">2</span> <span class="m">]</span> <span class="m">==</span> <span class="n">4</span></pre></div>
+  </div>
+</dialog>
+
+<dialog id="sheet-interop" class="sheet">
+  <div class="sheet-in">
+    <button class="sheet-x" aria-label="Close">&times;</button>
+    <p class="eyebrow">C / C++ interop</p>
+    <h3>One object model, no bindings.</h3>
+    <p>silver, C, and C++ meet inside Au — a C runtime with reference counting, reflection, and single
+      inheritance. Every type, in any of the three languages, is one <code>Au_t</code> schema node with one
+      memory layout.</p>
+    <div class="code"><pre><span class="c"># image.ag — declare in silver</span>
+<span class="k">class</span> <span class="t">image</span>
+    <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
+    <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>
+
+<span class="c">// image.c — implement in C, full field access</span>
+<span class="t">none</span> <span class="f">image_decode</span>(<span class="t">image</span> self) <span class="m">{</span>
+    FILE* f <span class="m">=</span> fopen(self<span class="m">-&gt;</span>uri<span class="m">-&gt;</span>chars, <span class="s">"rb"</span>);
+<span class="m">}</span></pre></div>
+    <p>The schema generates the C struct and the silver type with identical layout, so a field is the same
+      field on both sides — nothing to marshal at the boundary.</p>
+  </div>
+</dialog>
+
+<script>
+  document.querySelectorAll('.more').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var d = document.getElementById(b.dataset.sheet);
+      if (d && d.showModal) d.showModal();
+    });
+  });
+  document.querySelectorAll('dialog.sheet').forEach(function (d) {
+    var x = d.querySelector('.sheet-x');
+    if (x) x.addEventListener('click', function () { d.close(); });
+    d.addEventListener('click', function (e) { if (e.target === d) d.close(); });
+  });
+</script>
+
+</body>
+</html>
