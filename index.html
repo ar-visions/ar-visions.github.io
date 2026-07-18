@@ -531,8 +531,8 @@
         <p>An intern member is internal to the entire <em>module</em>, not just its class — so collaborating
           types share state without exporting it. That's dependency isolation at the module boundary, and it
           removes the need for <code>friend</code>-style escape hatches.</p>
-        <h3><code>require</code> — the user must provide it</h3>
-        <p>A require member is part of the public surface, but the compiler won't let an instance exist
+        <h3><code>expect</code> — the user must provide it</h3>
+        <p>An expect member is part of the public surface, but the compiler won't let an instance exist
           without it. Omit it at construction and the build fails, naming exactly what's missing —
           configuration errors caught at compile time, not at runtime. Context members are required the
           same way.</p>
@@ -543,7 +543,7 @@
     <span class="k">context</span> vk  <span class="m">:</span> <span class="t">vk_context</span>   <span class="c"># bound from scope, by type</span>
     <span class="k">context</span> ux  <span class="m">:</span> <span class="t">Window</span>       <span class="c"># never passed in</span>
     <span class="k">intern</span>  fd  <span class="m">:</span> <span class="t">i32</span> <span class="n">-1</span>      <span class="c"># module-visible, not exported</span>
-    <span class="k">require</span> uri <span class="m">:</span> <span class="t">path</span>         <span class="c"># the user must provide this</span>
+    <span class="k">expect</span> uri <span class="m">:</span> <span class="t">path</span>         <span class="c"># the user must provide this</span>
     <span class="k">public</span>  id  <span class="m">:</span> <span class="t">string</span>       <span class="c"># part of the public surface</span>
 
     <span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span>
