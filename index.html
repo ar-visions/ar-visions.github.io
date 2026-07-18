@@ -284,9 +284,17 @@
         <h3><span class="ic">⚙</span>Debug, test, profile — built in</h3>
         <p>Every build emits full LLDB debug info — source maps, variable inspection, stepping, breakpoints —
           on Linux, macOS, Windows, and embedded ARM from one source tree. Mark a function
-          <code>expect func</code> and the test compiles into the module itself, with built-in coverage
-          mapping and nanosecond timing reports.</p>
+          <code>expect func</code> and the test compiles into the module itself; <code>silver --test app</code>
+          runs every expect across the module and its imports, constructing the arguments — a live Vulkan
+          context included. A release build runs the debug tests first, and carries no test code at all.</p>
         <button class="more" data-sheet="sheet-debug">Read more →</button>
+      </div>
+      <div class="card">
+        <h3><span class="ic">.agi</span>A registry any tool can read</h3>
+        <p><code>export extensions ['.gen']</code> in a module writes <code>export/rgen.agi</code> under the
+          silver root at build time — one readable text file per module, keys for whatever the module
+          declares. orbiter opens a <code>.gen</code> by that declaration and runs rgen in its own process.
+          Modules built years apart associate without ever being compiled together.</p>
       </div>
       <div class="card">
         <h3><span class="ic">↔</span>C/C++ with no bindings</h3>
@@ -424,8 +432,9 @@
           negotiates docker permissions on its own. One command, any target:</p>
         <div class="code" style="margin-top:14px;">
           <div class="bar"><span class="dot"></span><span class="name">shell</span></div>
-<pre><span class="m">$</span> silver orbiter <span class="k">--platform</span> linux-aarch64
-<span class="c"># → builds the image, compiles + links inside it, emits an arm64 binary</span></pre>
+<pre><span class="m">$</span> silver <span class="k">--platform</span> linux-aarch64 orbiter
+<span class="c"># → builds the image, compiles + links inside it, emits an arm64 binary</span>
+<span class="c"># silver [flags] module [app-args] — args after the module go to the app</span></pre>
         </div>
       </div>
       <div>
@@ -725,10 +734,16 @@
     <p>Debug is the default build. Every binary carries full LLDB information — source maps, stepping,
       breakpoints, variable inspection — on every platform from one source tree.</p>
     <h4>Tests live in the module</h4>
-    <p>Mark a function <code>expect func</code> and it becomes a test the compiler verifies returns true. No
-      separate harness — it compiles in, with coverage mapping and nanosecond timing reported per run.</p>
+    <p>Mark a function <code>expect func</code> and it becomes a test. No separate harness — it compiles in,
+      with coverage mapping and nanosecond timing reported per run. <code>silver --test app</code> runs every
+      expect across the module and its imports, in each module's own initializer, then exits before the app
+      starts. Arguments are default-constructed — a test taking <code>vk_context</code> receives a real one,
+      renders headless, and reads its pixels back. A graphics app pins the average color of one rendered
+      frame: four integers that move when anything in the render path changes.</p>
     <div class="code"><pre><span class="k">expect func</span> <span class="f">math_ok</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">bool</span>
     <span class="k">return</span> <span class="f">add</span> <span class="m">[</span> <span class="n">2</span>, <span class="n">2</span> <span class="m">]</span> <span class="m">==</span> <span class="n">4</span></pre></div>
+    <p>A release build runs the debug tests first and refuses to build when they fail — and the release
+      binary contains none of the test code.</p>
   </div>
 </dialog>
 
