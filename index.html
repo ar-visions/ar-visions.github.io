@@ -3,10 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>silver — a native build language</title>
-<meta name="description" content="silver is a native, LLVM-backed systems language with live reload, a git-native import system that builds any dependency's own build system, and zero-binding C/C++ interop. MIT licensed, 8 years in development.">
-<meta property="og:title" content="silver — a native build language">
-<meta property="og:description" content="LLVM-backed systems language with live reload, git-native imports, and zero-binding C/C++ interop. MIT, self-hosting, in development since 2017.">
+<title>silver, a native build language</title>
+<meta name="description" content="silver is a native systems language on LLVM. It has live reload,
+  imports that pull any dependency from git and build it with its own build system, and C/C++ interop
+  with no bindings. MIT licensed, 8 years in development.">
+<meta property="og:title" content="silver, a native build language">
+<meta property="og:description" content="A native systems language on LLVM with live reload, imports
+  straight from git, and C/C++ interop with no bindings. MIT licensed, self-hosting, in development
+  since 2017.">
 <meta property="og:type" content="website">
 <link rel="icon" href="silver-icon.png">
 <style>
@@ -236,11 +240,9 @@
       <div class="wordmark">silver <span>v0.88</span></div>
     </div>
     <h1>A native build language whose <code class="kw">import</code> is <span class="g">open to the world</span>.</h1>
-    <p class="lede">
-      silver compiles <code>.ag</code> source to native binaries through LLVM. One import line clones a
-      dependency, detects <em>its own</em> build system, builds it, and links the result — then live-reloads
-      your running app on every save, with full debugger support on every platform.
-    </p>
+    <p class="lede">silver compiles <code>.ag</code> source to native binaries through LLVM. One
+      import line clones a dependency, works out <em>its own</em> build system, builds it and links the
+      result. Save a file and your running app reloads, and the debugger works on every platform.</p>
     <div class="badges">
       <span class="badge"><b>8 years</b> in research</span>
       <span class="badge"><b>~80k</b> lines</span>
@@ -259,10 +261,10 @@
   <div class="wrap">
     <p class="eyebrow">Why it's different</p>
     <h2>An isolated environment, filled with best practice.</h2>
-    <p class="sub">No package manager, no binding layer, no vtable tax you didn't ask for, and no platform
-      where the debugger goes dark. The whole ecosystem — from LLVM down to the Au runtime — builds from
-      source in isolation, into one self-contained folder that never touches your system, and your
-      cross-platform apps build from that same SDK.</p>
+    <p class="sub">silver doesn't need a package manager or a binding layer. You only pay for a vtable
+      when you ask for one, and the debugger works on every platform we target. Everything builds from
+      source, LLVM included, all the way down to the Au runtime. It all lands in one folder and leaves
+      your system alone. Your apps build for every platform from that same SDK.</p>
     <div class="grid">
       <div class="card">
         <h3><span class="ic">import</span>Direct from authors</h3>
@@ -273,34 +275,36 @@
       </div>
       <div class="card">
         <h3><span class="ic">↻</span>Live reload, built into the app</h3>
-        <p>The source watcher is compiled into the binaries themselves — not bolted onto an editor. Every
-          silver app can watch its own source and rebuild in place, whether you're developing it or it's been
-          installed into <code>share</code>. Edit, save, and the app hot-reloads its main module through a
-          built-in host — no script, no separate binary, not even a window reload. The same Vulkan session
-          stays live while your application module swaps underneath it.</p>
+        <p>The source watcher is compiled into the binary itself, so it isn't tied to an editor. A
+          silver app can watch its own source and rebuild in place, whether you're working on it or it's
+          been installed into <code>share</code>. Save a file and the app's built-in host swaps in the
+          new main module. There's no script or extra program, and the window stays open. The Vulkan
+          session keeps running while your module is replaced underneath it.</p>
         <button class="more" data-sheet="sheet-live">Read more →</button>
       </div>
       <div class="card">
-        <h3><span class="ic">⚙</span>Debug, test, profile — built in</h3>
-        <p>Every build emits full LLDB debug info — source maps, variable inspection, stepping, breakpoints —
-          on Linux, macOS, Windows, and embedded ARM from one source tree. Mark a function
-          <code>expect func</code> and the test compiles into the module itself; <code>silver --test app</code>
-          runs every expect across the module and its imports, constructing the arguments — a live Vulkan
-          context included. A release build runs the debug tests first, and carries no test code at all.</p>
+        <h3><span class="ic">⚙</span>Debugging and tests built in</h3>
+        <p>Every build carries full LLDB debug info on Linux, macOS, Windows and embedded ARM, from
+          one source tree, so you can step, set breakpoints and look at variables anywhere. Mark a
+          function <code>expect func</code> and it becomes a test compiled into the module. <code>silver
+          --test app</code> runs every expect in the module and its imports and builds their arguments
+          for them, a live Vulkan context included. A release build runs the debug tests first, and the
+          release binary has no test code in it.</p>
         <button class="more" data-sheet="sheet-debug">Read more →</button>
       </div>
       <div class="card">
         <h3><span class="ic">.agi</span>A registry any tool can read</h3>
-        <p><code>export extensions ['.gen']</code> in a module writes <code>export/rgen.agi</code> under the
-          silver root at build time — one readable text file per module, keys for whatever the module
-          declares. orbiter opens a <code>.gen</code> by that declaration and runs rgen in its own process.
-          Modules built years apart associate without ever being compiled together.</p>
+        <p><code>export extensions ['.gen']</code> in a module writes <code>export/rgen.agi</code>
+          under the silver root when it builds. It's one plain text file per module, holding whatever
+          keys the module declares. orbiter reads it to open a <code>.gen</code> file and runs rgen in
+          its own process. Modules built years apart can find each other this way without being compiled
+          together.</p>
       </div>
       <div class="card">
         <h3><span class="ic">↔</span>C/C++ with no bindings</h3>
-        <p>Declare a function in silver, implement it in a <code>.c</code> or <code>.cc</code> file beside it.
-          It compiles and links automatically with full access to your fields. The shared object model — Au —
-          serves C, C++, and silver equally.</p>
+        <p>Declare a function in silver and write its body in a <code>.c</code> or <code>.cc</code>
+          file next to it. It compiles and links on its own, and the C side sees all your fields. C, C++
+          and silver share one object model, Au.</p>
         <button class="more" data-sheet="sheet-interop">Read more →</button>
       </div>
     </div>
@@ -314,7 +318,7 @@
     <div class="two" style="align-items:center;">
       <div>
         <div class="module">
-          <img src="folder.png" alt="a silver module — a folder of source and resources">
+          <img src="folder.png" alt="a silver module: a folder of source and resources">
           <div class="module-chips">
             <span>.ag</span>
             <span>.c</span>
@@ -326,12 +330,11 @@
         </div>
       </div>
       <div class="txt">
-        <p>A silver module is a directory. Inside it: the <code>.ag</code> source, its <code>.c</code> and
-          <code>.cc</code> companions, the shaders, the stylesheet, the assets — built and versioned as a
-          single unit. Several languages and their resources, bound into one importable thing.</p>
-        <p>It's a simple idea almost nothing else does: the module is its silver source — the <code>.ag</code>
-          file — together with companion source in C, C++, or Rust (in-module),
-          virtually with use of { tokens } we integrate GLSL and CSS.</p>
+        <p>A silver module is a folder. It holds the <code>.ag</code> source, its <code>.c</code> and
+          <code>.cc</code> files, shaders, the stylesheet and the assets, and they're built and
+          versioned together. You import the whole folder as one thing.</p>
+        <p>Few languages do this. The module is the <code>.ag</code> file plus any C, C++ or Rust
+          beside it, and GLSL and CSS go right in the source as { tokens } blocks.</p>
       </div>
     </div>
   </div>
@@ -341,8 +344,8 @@
   <div class="wrap">
     <p class="eyebrow">The import system</p>
     <h2><code>import</code> Built the way the authors intend.</h2>
-    <p class="sub">Decentralized by design — depend on a commit or branch for deterministic builds. No
-      insecure supply-chain. Go direct to the software people.</p>
+    <p class="sub">There's no central registry. You depend on a commit or a branch, so a build comes
+      out the same every time, and the code comes straight from the people who wrote it.</p>
     <div class="code">
       <div class="bar"><span class="dot"></span><span class="name">app.ag</span></div>
 <pre><span class="k">import</span> KhronosGroup<span class="m">:</span>Vulkan-Headers<span class="m">/</span><span class="n">29184b9</span>
@@ -352,7 +355,7 @@
 <span class="k">import</span> madler<span class="m">:</span>zlib<span class="m">/</span><span class="n">51b7f2a</span> <span class="t">&lt;zlib.h&gt;</span>
     <span class="m">-</span>DCMAKE_POLICY_VERSION_MINIMUM<span class="m">=</span><span class="n">3.5</span>
 
-<span class="c"># C headers, too — macros and types available at design time</span>
+<span class="c"># C headers too, with their macros and types at design time</span>
 <span class="k">import</span> <span class="t">&lt;stdio.h&gt;</span></pre>
     </div>
   </div>
@@ -362,57 +365,61 @@
   <div class="wrap">
     <p class="eyebrow">Interoperability</p>
     <h2>C and C++, sharing one object model.</h2>
-    <p class="sub">There is no binding layer because there is nothing to bind. silver, C, and C++ meet inside
-      a single C runtime — <strong>Au</strong> — where every type is described by one schema node.</p>
+    <p class="sub">silver, C and C++ all run on one C runtime, <strong>Au</strong>, where every type
+      is described by one schema node. Nothing differs between them, so there's no binding layer to
+      write.</p>
 
     <div class="two">
       <div class="txt">
         <h3>Everything is an <code>Au_t</code></h3>
-        <p>One type descriptor stands behind all of it — structs, classes, enums, and each of their members.
-          An <code>Au_t</code> holds a type's members, methods, vtable, size, and traits. Reflection, reference
-          counting, and single inheritance come from the runtime, not from each language separately.</p>
+        <p>Structs, classes, enums and their members all come down to one type descriptor. An
+          <code>Au_t</code> holds a type's members, methods, vtable, size and traits. The runtime
+          handles reflection, reference counting and single inheritance, so each language doesn't have
+          to.</p>
         <h3>The schema node</h3>
-        <p>A type is declared once as a schema — its members, methods, overrides, and constructors — and that
-          schema produces the same <code>Au_t</code> whether the type was written in silver or in C. The object
-          layout is identical, so a field is the same field on either side.</p>
+        <p>You declare a type once as a schema: its members, methods, overrides and constructors. That
+          schema produces the same <code>Au_t</code> whether you wrote the type in silver or in C. The
+          memory layout matches, so a field is the same field on either side.</p>
         <h3>Imported at design time</h3>
-        <p>C and C++ headers are read through libclang as you build. Their macros, structs, and functions become
-          <code>Au_t</code> nodes too — a Vulkan handle or a zlib struct is a first-class participant in your
-          program, not a foreign object reached through a wrapper.</p>
+        <p>C and C++ headers are read through libclang as you build, and their macros, structs and
+          functions become <code>Au_t</code> nodes too. A Vulkan handle or a zlib struct works like any
+          other type in your program, with no wrapper around it.</p>
       </div>
       <div class="code">
         <div class="bar"><span class="dot"></span><span class="name">image.ag  +  image.c</span></div>
-<pre><span class="c"># image.ag — declare in silver, leave the body out</span>
+<pre><span class="c"># image.ag: declare in silver, leave the body out</span>
 <span class="k">class</span> <span class="t">image</span>
     <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
     <span class="k">public</span> w<span class="m">:</span> <span class="t">i32</span>
     <span class="k">public</span> h<span class="m">:</span> <span class="t">i32</span>
     <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>
 
-<span class="c">// image.c — implement in C, with full field access</span>
+<span class="c">// image.c: implement in C, with full field access</span>
 <span class="t">none</span> <span class="f">image_decode</span>(<span class="t">image</span> self) <span class="m">{</span>
     FILE* f <span class="m">=</span> fopen(self<span class="m">-&gt;</span>uri<span class="m">-&gt;</span>chars, <span class="s">"rb"</span>);
     <span class="c">// self-&gt;w and self-&gt;h are the same fields silver sees</span>
     <span class="m">...</span>
 <span class="m">}</span>
 
-<span class="c"># no wrappers, no bindings, no marshalling — it just links</span></pre>
+<span class="c"># it just links: no wrapper in between</span></pre>
       </div>
     </div>
 
     <div class="trio">
       <div class="card">
         <h3><span class="ic">Au_t</span>One descriptor</h3>
-        <p>Structs, classes, enums, and their members are all the same node. Learn one model, not three.</p>
+        <p>Structs, classes, enums and their members are the same kind of node, so there's one model
+          to learn.</p>
       </div>
       <div class="card">
         <h3><span class="ic">{ }</span>One schema</h3>
-        <p>The schema generates the C struct and the silver type with one identical layout — so there's no
-          marshalling at the boundary. A field is the same field on both sides.</p>
+        <p>The schema generates the C struct and the silver type with the same layout, so nothing gets
+          converted at the boundary.</p>
       </div>
       <div class="card">
         <h3><span class="ic">&lt; &gt;</span>One namespace</h3>
-        <p>Imported C and C++ types are first-class at design time — reflected through libclang, not wrapped.</p>
+        <p>Imported C and C++ types are read through libclang at design time and used directly,
+          without wrappers.</p>
       </div>
     </div>
   </div>
@@ -424,17 +431,18 @@
     <div class="two" style="align-items:center;">
       <div class="txt">
         <h2 style="margin-top:0;">The compiler ships Docker inside it.</h2>
-        <p>Cross-compiling is usually a fragile pile of toolchains. silver folds Docker into the compiler
-          itself: name a target and it builds a per-platform image from that platform's Dockerfile, then runs
-          the <em>entire</em> build inside the container — your dependencies' CMake, Meson, GN, and autotools,
-          then <code>llc</code>, <code>clang</code>, and the final link — against that platform's SDK.</p>
-        <p>You never touch a container. silver builds the image if it's missing, mounts the SDK, and even
-          negotiates docker permissions on its own. One command, any target:</p>
+        <p>Cross-compiling usually means keeping a stack of toolchains working. silver has Docker
+          built into the compiler. Name a target and it builds an image from that platform's Dockerfile,
+          then runs the <em>whole</em> build inside it against that platform's SDK: your dependencies'
+          CMake, Meson, GN or autotools builds, then <code>llc</code>, <code>clang</code> and the final
+          link.</p>
+        <p>You don't manage the container yourself. silver builds the image if it's missing, mounts
+          the SDK and sorts out the Docker permissions. It's one command for any target:</p>
         <div class="code" style="margin-top:14px;">
           <div class="bar"><span class="dot"></span><span class="name">shell</span></div>
 <pre><span class="m">$</span> silver <span class="k">--platform</span> linux-aarch64 orbiter
 <span class="c"># → builds the image, compiles + links inside it, emits an arm64 binary</span>
-<span class="c"># silver [flags] module [app-args] — args after the module go to the app</span></pre>
+<span class="c"># silver [flags] module [app-args]: args after the module go to the app</span></pre>
         </div>
       </div>
       <div>
@@ -479,16 +487,17 @@
         <p class="eyebrow">The language</p>
         <h2>Succinct and explicit.</h2>
         <h3>Polymorphism you opt into</h3>
-        <p>Calls are direct by default — a static call with zero vtable overhead, so LLVM can inline,
-          const-propagate, and auto-vectorize across the boundary. When you want dynamic dispatch, you ask
-          for it with <code>*</code>. The cost is visible exactly where you pay it.</p>
+        <p>Calls are direct by default. A static call has no vtable cost, so LLVM can inline, fold
+          constants and vectorize across it. When you want dynamic dispatch you write <code>*</code>, so
+          you can see in the code where you pay for it.</p>
         <h3>Units as types, shapes as literals</h3>
         <p><code>200px</code> and <code>200em</code> are distinct types with compile-time conversions.
-          <code>new f32 [32x32x1]</code> allocates a typed tensor. Built for graphics, DSP, and neural nets.</p>
+          <code>new f32 [32x32x1]</code> allocates a typed tensor. That comes in handy for graphics, DSP
+          and neural networks.</p>
       </div>
       <div class="code">
         <div class="bar"><span class="dot"></span><span class="name">trinity.ag</span></div>
-<pre><span class="c"># trinity's base app — the hot-reloaded module subclasses this</span>
+<pre><span class="c"># trinity's base app; the hot-reloaded module subclasses it</span>
 <span class="k">abstract</span> <span class="t">live_app</span> <span class="t">media_app</span>
     <span class="k">context</span> w           <span class="m">:</span> <span class="t">Display*</span>     <span class="c"># bound from scope; '*' = any subtype</span>
     <span class="k">context</span> vk          <span class="m">:</span> <span class="t">vk_context</span>   <span class="c"># the renderer, never passed in</span>
@@ -517,25 +526,25 @@
   <div class="wrap">
     <p class="eyebrow">Member access</p>
     <h2>Less to pass around.</h2>
-    <p class="sub">Visibility and context are part of the type, not an afterthought — so the compiler threads
-      the right data to the right place and keeps modules honest.</p>
+    <p class="sub">Visibility and context are part of a type, so the compiler can hand data to where
+      it's needed and keep modules apart.</p>
 
     <div class="two">
       <div class="txt">
-        <h3><code>context</code> — bound from scope, by type</h3>
-        <p>A context member binds automatically to a value of its type already in scope — the Vulkan context,
-          the active window, the allocator. Declared once, present wherever it's needed, and never threaded
-          through every call in between. It's implicit integration of contextual data, and you can always
-          override it explicitly. Less to pass around, more to read.</p>
-        <h3><code>intern</code> — visible to the whole module</h3>
-        <p>An intern member is internal to the entire <em>module</em>, not just its class — so collaborating
-          types share state without exporting it. That's dependency isolation at the module boundary, and it
-          removes the need for <code>friend</code>-style escape hatches.</p>
-        <h3><code>expect</code> — the user must provide it</h3>
-        <p>An expect member is part of the public surface, but the compiler won't let an instance exist
-          without it. Omit it at construction and the build fails, naming exactly what's missing —
-          configuration errors caught at compile time, not at runtime. Context members are required the
-          same way.</p>
+        <h3><code>context</code>: bound from scope, by type</h3>
+        <p>A context member is filled in automatically from a value of its type that's already in
+          scope, like the Vulkan context, the active window or the allocator. You declare it once and
+          it's there, without passing it through every call in between. You can still set it yourself
+          when you want to.</p>
+        <h3><code>intern</code>: visible to the whole module</h3>
+        <p>An intern member is visible across the whole <em>module</em>, not only its class, so types
+          that work together can share state without exporting it. That keeps dependencies inside the
+          module, and you don't need <code>friend</code>-style workarounds.</p>
+        <h3><code>expect</code>: the user must provide it</h3>
+        <p>An expect member is part of the public surface, and the compiler won't let you make an
+          instance without it. Leave it out and the build fails and names what's missing, so a
+          configuration mistake shows up when you compile instead of when you run. Context members are
+          required the same way.</p>
       </div>
       <div class="code">
         <div class="bar"><span class="dot"></span><span class="name">element.ag</span></div>
@@ -558,19 +567,19 @@
   <div class="wrap">
     <p class="eyebrow">Built in silver</p>
     <h2>It compiles its own tools.</h2>
-    <p class="sub">About a quarter of the codebase — the IDE and the renderer — is written in silver itself.
-      The strongest test of a language is whether you'd build something real in it.</p>
+    <p class="sub">About a quarter of the code, the IDE and the renderer, is written in silver. We
+      build our own tools in it because that's the best test of a language.</p>
     <div class="builtwith">
       <div class="bw">
         <span class="tag">IDE</span>
         <h3>orbiter</h3>
-        <p>The development environment for silver, written in silver, running on the trinity engine —
-          editing and live-reloading itself.</p>
+        <p>The development environment for silver, written in silver and running on trinity. It edits
+          and live-reloads itself.</p>
       </div>
       <div class="bw">
         <span class="tag">ENGINE</span>
         <h3>trinity</h3>
-        <p>A Vulkan-based composition and SDF compute-canvas — the rendering foundation orbiter is built on.</p>
+        <p>A Vulkan composition engine with an SDF canvas on compute. orbiter is built on it.</p>
       </div>
     </div>
   </div>
@@ -580,28 +589,30 @@
   <div class="wrap">
     <p class="eyebrow">trinity engine</p>
     <h2>Declarative UX, CSS with your properties.</h2>
-    <p class="sub">orbiter — the IDE — is built on trinity: a Vulkan composition engine whose canvas rasterizes
-      vector shapes as signed-distance fields on the compute pipeline. The entire interface is described in a
-      CSS dialect, with layers, transitions, and filters built into the language of the stylesheet.</p>
+    <p class="sub">The IDE, orbiter, is built on trinity: a Vulkan composition engine whose canvas
+      draws vector shapes as signed-distance fields on the compute pipeline. The whole interface is
+      written in a CSS dialect, and layers, transitions and filters are part of the stylesheet
+      language.</p>
 
     <div class="two">
       <div class="txt">
         <h3>SDF canvas on Vulkan compute</h3>
-        <p>Rounded rects, paths, and strokes are evaluated as signed-distance fields by a compute shader and
-          written to a storage image, then composited. Crisp at any scale, antialiased for free, and resident
-          on the GPU — no CPU rasterizer in the loop.</p>
+        <p>Rounded rects, paths and strokes are computed as signed-distance fields by a compute
+          shader, written to a storage image and then composited. They stay sharp at any scale, come out
+          antialiased and stay on the GPU. No CPU rasterizer is involved.</p>
         <h3>Layers, not element trees</h3>
-        <p>A single element carries named render layers — <code>layers.base</code>, <code>layers.inner</code>,
-          <code>layers.border</code> — each with its own area, fill, stroke, and glow. One element does the
-          work of a whole nested subtree, so there's far less for you to declare.</p>
+        <p>One element has named render layers (<code>layers.base</code>, <code>layers.inner</code>,
+          <code>layers.border</code>), each with its own area, fill, stroke and glow. One element can do
+          what would take a nested subtree elsewhere, so you write much less.</p>
         <h3>Transitions &amp; low-pass, in the CSS</h3>
-        <p>A property animates by appending its timing: <code>fill_color: #4af, 222ms cubic</code>. Dynamic
-          shader inputs are smoothed by a low-pass filter the same way — <code>pulse_width: 1.0, filter
-          0.8</code>. Motion and signal-smoothing are declarative, never wired up by hand.</p>
+        <p>A property animates by adding its timing: <code>fill_color: #4af, 222ms cubic</code>.
+          Shader inputs that change get smoothed by a low-pass filter written the same way:
+          <code>pulse_width: 1.0, filter 0.8</code>. You describe the motion and the smoothing in the
+          stylesheet instead of wiring them up in code.</p>
       </div>
       <div class="code">
         <div class="bar"><span class="dot"></span><span class="name">orbiter.css</span></div>
-<pre><span class="c">/* one element, several visual layers — not a tree */</span>
+<pre><span class="c">/* one element with several layers, not a tree */</span>
 <span class="t">Group / Check</span> {
     <span class="k">layers.base</span>:
         area:         l0.5 t0.5 w1.0 h1.0
@@ -620,10 +631,10 @@
       </div>
     </div>
 
-    <p class="plat-cap">And the elements themselves — one expression</p>
+    <p class="plat-cap">And the elements themselves are one expression</p>
     <div class="code">
       <div class="bar"><span class="dot"></span><span class="name">orbiter.ag</span></div>
-<pre><span class="c"># the whole finder bar — a single declarative expression</span>
+<pre><span class="c"># the whole finder bar as one declarative expression</span>
 <span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">Elements</span> <span class="m">[</span>
     find<span class="m">:</span>    <span class="t">element</span> <span class="m">[</span> label<span class="m">:</span> <span class="s">'Find'</span>,    edit<span class="m">:</span> findbar_text <span class="m">]</span>
     replace<span class="m">:</span> <span class="t">element</span> <span class="m">[</span> label<span class="m">:</span> <span class="s">'Replace'</span>, edit<span class="m">:</span> replace_text <span class="m">]</span>
@@ -648,8 +659,8 @@
 <section style="border-bottom:none;">
   <div class="wrap" style="text-align:center;">
     <h2>Read the source.</h2>
-    <p class="sub" style="margin:0 auto 28px;">An LLVM-backed compiler written in C, a Python build pipeline,
-      and the language compiling itself. MIT licensed.</p>
+    <p class="sub" style="margin:0 auto 28px;">A compiler written in C on LLVM, a Python build
+      pipeline, and the language compiling itself. MIT licensed.</p>
     <div class="cta" style="justify-content:center;">
       <a class="btn primary" href="https://github.com/ar-visions/silver">github.com/ar-visions/silver →</a>
     </div>
@@ -659,7 +670,7 @@
 <footer>
   <div class="wrap">
     <div class="row">
-      <div>silver — a native build language · MIT License · © 2017 Kalen Novis White</div>
+      <div>silver, a native build language · MIT License · © 2017 Kalen Novis White</div>
       <div class="row" style="gap:18px;">
         <a href="https://github.com/ar-visions/silver">silver</a>
         <a href="https://github.com/ar-visions/orbiter">orbiter</a>
@@ -674,8 +685,9 @@
     <button class="sheet-x" aria-label="Close">&times;</button>
     <p class="eyebrow">import</p>
     <h3>One keyword, every source.</h3>
-    <p><code>import</code> resolves a dependency, builds it from source, and brings its types into scope. It
-      has a handful of forms — all of them build, none of them pull a prebuilt binary.</p>
+    <p><code>import</code> resolves a dependency, builds it from source and brings its types into
+      scope. There are a few forms, and every one of them builds from source. None of them downloads a
+      prebuilt binary.</p>
 
     <h4>The forms</h4>
     <div class="code"><pre><span class="k">import</span> img                          <span class="c"># local silver module</span>
@@ -684,20 +696,20 @@
 <span class="k">import</span> numpy <span class="k">as</span> np                  <span class="c"># namespaced</span>
 <span class="k">import</span> <span class="t">&lt;stdio.h&gt;</span>                    <span class="c"># a C header alone</span></pre></div>
 
-    <h4>From anywhere — <code>from</code></h4>
-    <p>By default an import resolves against your own git service and owner. <code>from</code> overrides that,
-      pointing import at any service or URL — the rest of the line behaves the same.</p>
+    <h4>From anywhere with <code>from</code></h4>
+    <p>By default an import resolves against your own git service and owner. <code>from</code> points
+      it at any other service or URL, and the rest of the line works the same.</p>
     <div class="code"><pre><span class="k">import</span> mylib <span class="k">from</span> https<span class="m">:</span>//gitlab.com/team/mylib<span class="m">/</span><span class="n">a1b2c3d</span></pre></div>
 
     <h4>It detects the build system</h4>
-    <p>silver clones the repo, recognizes its build — CMake, Meson, Cargo, GN, or autotools — runs it with
-      that project's own tools, and links the result. C and C++ headers are parsed through libclang and made
+    <p>silver clones the repo, works out how it builds (CMake, Meson, Cargo, GN or autotools), runs
+      that project's own tools and links the result. C and C++ headers are read through libclang and are
       available at design time, macros included.</p>
 
     <h4>silver + C + C++, one module</h4>
     <p>A module's <code>.ag</code> source compiles alongside its <code>.c</code> and <code>.cc</code>
-      companions. Declare a function in silver with no body, implement it in C — they share the Au object
-      layout, so there are no wrappers and nothing to marshal.</p>
+      files. Declare a function in silver with no body and write it in C. Both use the Au object layout,
+      so there's no wrapper and nothing to convert.</p>
     <div class="code"><pre><span class="k">class</span> <span class="t">image</span>
     <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
     <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>      <span class="c"># body lives in image.c</span></pre></div>
@@ -715,14 +727,14 @@
     <button class="sheet-x" aria-label="Close">&times;</button>
     <p class="eyebrow">live reload</p>
     <h3>The watcher ships in the binary.</h3>
-    <p>Run a project in watch mode and silver keeps an eye on its source. On save it recompiles only the
-      changed module, loads the new code, and hands control back — the window and the Vulkan session never
-      tear down.</p>
+    <p>Run a project in watch mode and silver watches its source. When you save, it recompiles only
+      the module that changed, loads the new code and carries on. The window and the Vulkan session stay
+      up.</p>
     <div class="code"><pre><span class="m">$</span> silver orbiter <span class="k">--watch</span></pre></div>
     <h4>What persists</h4>
-    <p>A built-in host holds long-lived state — the Vulkan context, caches, your app object — across the swap.
-      Only the application module's code is replaced underneath it, so a reload costs a frame, not a restart.
-      Installed apps under <code>share</code> watch their own source the same way.</p>
+    <p>A built-in host keeps the long-lived state (the Vulkan context, caches, your app object)
+      through the swap. Only the app module's code is replaced, so a reload costs a frame instead of a
+      restart. Apps installed under <code>share</code> watch their own source the same way.</p>
   </div>
 </dialog>
 
@@ -731,19 +743,20 @@
     <button class="sheet-x" aria-label="Close">&times;</button>
     <p class="eyebrow">debug · test · profile</p>
     <h3>Instrumented by default.</h3>
-    <p>Debug is the default build. Every binary carries full LLDB information — source maps, stepping,
-      breakpoints, variable inspection — on every platform from one source tree.</p>
+    <p>Debug is the default build. Every binary carries full LLDB information on every platform, from
+      one source tree: source maps, stepping, breakpoints and variable inspection.</p>
     <h4>Tests live in the module</h4>
-    <p>Mark a function <code>expect func</code> and it becomes a test. No separate harness — it compiles in,
-      with coverage mapping and nanosecond timing reported per run. <code>silver --test app</code> runs every
-      expect across the module and its imports, in each module's own initializer, then exits before the app
-      starts. Arguments are default-constructed — a test taking <code>vk_context</code> receives a real one,
-      renders headless, and reads its pixels back. A graphics app pins the average color of one rendered
-      frame: four integers that move when anything in the render path changes.</p>
+    <p>Mark a function <code>expect func</code> and it's a test. It compiles into the module, so
+      there's no separate harness, and each run reports coverage and timings down to the nanosecond.
+      <code>silver --test app</code> runs every expect in the module and its imports, each in its
+      module's own initializer, and exits before the app starts. Arguments are built with their
+      defaults, so a test that takes a <code>vk_context</code> gets a real one, renders without a window
+      and reads its pixels back. A graphics app can pin the average color of one rendered frame: four
+      numbers that change when anything in the render path does.</p>
     <div class="code"><pre><span class="k">expect func</span> <span class="f">math_ok</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">bool</span>
     <span class="k">return</span> <span class="f">add</span> <span class="m">[</span> <span class="n">2</span>, <span class="n">2</span> <span class="m">]</span> <span class="m">==</span> <span class="n">4</span></pre></div>
-    <p>A release build runs the debug tests first and refuses to build when they fail — and the release
-      binary contains none of the test code.</p>
+    <p>A release build runs the debug tests first and won't build if any fail. The release binary has
+      none of the test code in it.</p>
   </div>
 </dialog>
 
@@ -752,20 +765,20 @@
     <button class="sheet-x" aria-label="Close">&times;</button>
     <p class="eyebrow">C / C++ interop</p>
     <h3>One object model, no bindings.</h3>
-    <p>silver, C, and C++ meet inside Au — a C runtime with reference counting, reflection, and single
-      inheritance. Every type, in any of the three languages, is one <code>Au_t</code> schema node with one
-      memory layout.</p>
-    <div class="code"><pre><span class="c"># image.ag — declare in silver</span>
+    <p>silver, C and C++ meet in Au, a C runtime with reference counting, reflection and single
+      inheritance. Every type in any of the three languages is one <code>Au_t</code> schema node with
+      one memory layout.</p>
+    <div class="code"><pre><span class="c"># image.ag: declare in silver</span>
 <span class="k">class</span> <span class="t">image</span>
     <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
     <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>
 
-<span class="c">// image.c — implement in C, full field access</span>
+<span class="c">// image.c: implement in C, full field access</span>
 <span class="t">none</span> <span class="f">image_decode</span>(<span class="t">image</span> self) <span class="m">{</span>
     FILE* f <span class="m">=</span> fopen(self<span class="m">-&gt;</span>uri<span class="m">-&gt;</span>chars, <span class="s">"rb"</span>);
 <span class="m">}</span></pre></div>
-    <p>The schema generates the C struct and the silver type with identical layout, so a field is the same
-      field on both sides — nothing to marshal at the boundary.</p>
+    <p>The schema generates the C struct and the silver type with the same layout, so a field is the
+      same field on both sides and nothing gets converted at the boundary.</p>
   </div>
 </dialog>
 
