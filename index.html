@@ -867,7 +867,9 @@ func unit_example [] -&gt; bool
       <p>A shape is itself a value with a dimension count and total size.
         Shaped vectors accept one index per dimension. Arithmetic is
         element-wise; scalars broadcast; numeric built-ins such as square root,
-        min, max, and clamp map over vectors.</p>
+        min, max, and clamp map over vectors. These operations compile as typed
+        loops over contiguous numeric storage. They are not dynamic method calls
+        repeated once per element.</p>
 
       <dl class="dense">
         <dt><code>local T[n]</code></dt>
