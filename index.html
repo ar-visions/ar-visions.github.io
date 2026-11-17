@@ -606,43 +606,130 @@
         name and kind, including non-public members when the caller has the
         module context.</p>
 
-      <pre><code>class Range &lt; string &gt;
-    public [ Launch, Slider [ 0.0, 1.0 ] ] value: f32
-    action func reset []
-        value = 0.0
+      <h3>Metadata</h3>
+      <p>A type or member can carry up to two typed metadata objects. The
+        descriptor holds their types and constructor values, so a tool can
+        discover controls, launch fields, or shader bindings without a second
+        schema.</p>
 
-t: Au_t [ typeid[ Range ] ]
-m: Au.find_member[ t, 'value', AU_MEMBER_VAR, 0, false ]</code></pre>
+      <pre><code>class Launch
+class Slider
 
-      <dl class="dense">
-        <dt>Metadata</dt>
-        <dd>A type and each member can carry one or two typed metadata objects.
-          Tools can find controls, launch fields, shader bindings, or other
-          interfaces without a parallel schema.</dd>
-        <dt>Actions</dt>
-        <dd>An <code>action func</code> is marked as a host-callable operation.
-          It remains an ordinary typed method when called by silver code.</dd>
-        <dt>Attributes</dt>
-        <dd><code>attrib</code> creates a static declaration-time object. Its
-          value is available through the member descriptor.</dd>
-        <dt>Serialization</dt>
-        <dd>AGI writing and parsing use the graph. The tests round-trip nested
-          structs, vectors of objects, Unicode field names, null fields, and
-          ordinary scalars.</dd>
-        <dt>Arguments</dt>
-        <dd>The command-line reader maps <code>--name value</code> to public
-          members and the bare argument to the member marked
-          <code>default</code>.</dd>
-        <dt>Registry</dt>
-        <dd>Module exports are written as AGI. A process can find a module by
-          name at runtime; live replacement removes the old descriptors and
-          promotes the prepared descriptors at the handoff.</dd>
-      </dl>
+class Mixer
+    public [ Launch, Slider [ 0.0, 1.0 ] ] gain: f32 [ 0.5 ]
+
+func gain_metadata [] -> bool
+    t: Au_t [ typeid[ Mixer ] ]
+    m: Au.find_member[
+        t, 'gain', AU_MEMBER_VAR, 0, false ]
+    return m.meta.m == typeid[ Launch ]
+        &amp;&amp; m.meta.member_b == typeid[ Slider ]</code></pre>
+
+      <h3>Actions</h3>
+      <p>An <code>action func</code> is a host-callable operation in the type
+        graph. Silver code calls it as an ordinary typed method.</p>
+
+      <pre><code>class Counter
+    public n: i32
+
+    action func bump []
+        n += 1
+
+func action_example [] -> bool
+    counter: Counter [ ]
+    counter.bump[]
+    member: Au.find_member[
+        typeid[ Counter ], 'bump', AU_MEMBER_FUNC, 0, false ]
+    return counter.n == 1
+        &amp;&amp; member.access_type == interface.action</code></pre>
+
+      <h3>Attributes</h3>
+      <p><code>attrib</code> builds one static object when the module loads. Its
+        descriptor carries both the attribute marker and the object value.</p>
+
+      <pre><code>class Tone
+    public value: i32
+
+class Defaults
+    attrib tone: Tone [ value: 3 ]
+
+func attribute_example [] -> i32
+    t: Au_t [ typeid[ Defaults ] ]
+    for [ member: Au_t ] in t.members
+        if [ member.traits &amp; (1 &lt;&lt; 56) ]
+            boxed: Au [ member.value ]
+            tone: Tone [ boxed ]
+            return tone.value
+    return 0</code></pre>
+
+      <h3>Serialization</h3>
+      <p>AGI writing walks the same descriptors used by compiled code. Parsing
+        rebuilds typed objects, including nested structs, object vectors,
+        Unicode member names, and null fields.</p>
+
+      <pre><code>struct Point
+    x: i32
+    y: i32
+
+class Item
+    public name: string
+    public count: i32
+
+class Document
+    public point: Point
+    public items: vec Item
+    public note: string
+
+func serialization_example [] -> bool
+    source: Document [ point: Point [ x: 3, y: 4 ] ]
+    source.items = vec Item []
+    source.items.push[ Item [ name: 'part', count: 7 ] ]
+    text: Au.string_agi[ source ]
+    copy: cast Document [
+        Au.parse_agi[ typeid[ Document ], text.chars, null ] ]
+    return copy.point.x == 3 &amp;&amp; copy.items[ 0 ].count == 7
+        &amp;&amp; copy.note == null</code></pre>
+
+      <h3>Arguments</h3>
+      <p>The command-line reader maps <code>--name value</code> to public
+        members. A bare argument is assigned to the member marked
+        <code>default</code>.</p>
+
+      <pre><code>intern func Au_with_cstrs [ object, @cstr ] -> object
+
+class ToolArgs
+    public depth: i32
+    public fast: bool
+    default input: path
+
+func arguments_example [] -> bool
+    argv: local cstr [ 6 ] [
+        "tool", "--depth", "4", "--fast", "scene.ag", null ]
+    args: ToolArgs [ ]
+    Au_with_cstrs[ args, @argv[ 0 ] ]
+    return args.depth == 4 &amp;&amp; args.fast
+        &amp;&amp; string [ args.input ] == 'scene.ag'</code></pre>
+
+      <h3>Registry</h3>
+      <p>Module exports are written to an owner-qualified AGI file. A
+        <code>moduleid</code> resolves the same module descriptor from a static
+        name or a runtime string. During live replacement, the host removes the
+        old image's descriptors and promotes the prepared set at the handoff.</p>
+
+      <pre><code>export extensions [ '.feat' ]
+export landscape: true
+export formats [ '.fa': FileType.ascii, '.fb' ]
+
+func registry_example [] -> bool
+    known: moduleid[ features ]
+    name: 'features'
+    found: moduleid[ name ]
+    return known &amp;&amp; found &amp;&amp; known == found</code></pre>
     </section>
 
     <section id="dispatch">
       <span class="kicker">Object model</span>
-      <h2>Dispatch is a call-site decision.</h2>
+      <h2>VTable is a call-site decision.</h2>
       <p class="opening">Class methods call directly by default. Add
         <code>*</code> when the call must follow the runtime type.</p>
 
@@ -654,14 +741,19 @@ Shape Triangle
     sides: 3
     func name [] -&gt; string [ 'triangle' ]
 
-base: Shape* [ Triangle [] ]
-static_name: base.name[]
-dynamic_name: base.name*[]</code></pre>
+func names_differ [] -> bool
+    base: Shape* [ Triangle [] ]
+    static_name: base.name[]
+    dynamic_name: base.name*[]
+    return static_name != dynamic_name</code></pre>
 
-      <p>The direct form preserves a visible, optimizable call target. The
-        dynamic form uses the object's runtime type. <code>super</code> reaches
-        the base implementation. Abstract classes and abstract members enforce
-        that a concrete subtype supplies the missing behavior.</p>
+      <p>This is transparent in the source: the direct form names a fixed
+        symbol, giving the compiler a visible target for inlining and other
+        optimization. The <code>*</code> form explicitly requests an indirect
+        VTable lookup from the object's runtime type. Code pays that extra call
+        cost only where polymorphism is needed. <code>super</code> reaches the
+        base implementation. Abstract classes and abstract members require a
+        concrete subtype to supply the missing behavior.</p>
 
       <h3>Member declarations carry policy</h3>
       <div class="matrix">
@@ -671,10 +763,11 @@ dynamic_name: base.name*[]</code></pre>
           the module, absent from the exported interface.</p></div>
         <div><strong><code>expect</code></strong><p>Required construction input.
           Construction fails when the value is missing.</p></div>
-        <div><strong><code>context</code></strong><p>Bound by type from an existing
-          context instead of threaded through every intermediate call.</p></div>
-        <div><strong><code>manual</code> / <code>unmanaged</code></strong><p>A raw
-          object slot that does not take or release a reference.</p></div>
+        <div><strong><code>context</code> (always public)</strong><p>Bound by type
+          from an existing context instead of threaded through every
+          intermediate call.</p></div>
+        <div><strong><code>manual</code></strong><p>A raw object slot that does not
+          take or release a reference.</p></div>
         <div><strong><code>static</code> / <code>persist</code></strong><p>One slot
           per type, with persist adding transfer to the next live image.</p></div>
       </div>
@@ -711,25 +804,65 @@ dynamic_name: base.name*[]</code></pre>
         normal C ABI.</p>
 
       <h3>Units are distinct scalar types</h3>
-      <pre><code>scalar mm: f32
+      <pre><code>scalar ms: i64
+
+scalar mm: f32
     cast -&gt; cm [ a / 10.0 ]
-    construct [ v: cm ] [ v * 10.0 ]
+    cast -&gt; inch [ a / 25.4 ]
+    construct [ value: cm ] [ value * 10.0 ]
 
-distance: 254mm
-width: 200px
-delay: 16ms</code></pre>
+scalar cm: f32
+    cast -&gt; mm [ a * 10.0 ]
+    construct [ value: mm ] [ value / 10.0 ]
 
-      <p>A scalar can define construction and casts between units and can
-        override its text form. Integer-backed units reject fractional values.
-        Arguments written without commas can be matched by type, so distinct
-        unit types can determine their own parameter positions.</p>
+scalar inch: f32
+    cast -&gt; mm [ a * 25.4 ]
+    construct [ value: mm ] [ value / 25.4 ]
+
+scalar pct: f32
+    cast -&gt; string [ '{i32[ f32[ a ] ]}%' ]
+
+func report [ distance: mm, delay: ms, complete: pct ] -&gt; string
+    centimeters: cast cm [ distance ]
+    same_distance: cm [ distance ]
+    inches: inch [ distance ]
+    round_trip: mm [ centimeters ]
+    line: '{distance} = {centimeters.1f} = {inches.2f}'
+    puts line
+    log 'delay {delay.3d}; complete {complete}'
+    log 'constructed {same_distance}; round trip {round_trip}'
+    return line
+
+func unit_example [] -&gt; bool
+    line: report[ 75pct 16ms 254mm ]
+    return line == '254mm = 25.4cm = 10.00inch'</code></pre>
+
+      <p>The suffix constructs a value of that scalar type: <code>254mm</code>
+        is not a plain float. <code>cast cm [ distance ]</code> uses the cast
+        declared by <code>mm</code>; <code>cm [ distance ]</code> uses the
+        constructor declared by <code>cm</code>. Both produce
+        <code>25.4cm</code>, and construction can convert it back to
+        <code>254mm</code>.</p>
+
+      <p>Default formatting prints the unit suffix. Numeric format suffixes
+        remain available: <code>centimeters.1f</code> prints
+        <code>25.4cm</code>, <code>inches.2f</code> prints
+        <code>10.00inch</code>, and <code>delay.3d</code> prints
+        <code>016ms</code>. A scalar can replace that representation with its
+        own string cast, as <code>pct</code> does.</p>
+
+      <p>An integer-backed scalar rejects fractional literals. The call to
+        <code>report</code> deliberately changes the argument order and omits
+        commas; Silver matches those arguments to parameters by their distinct
+        scalar types.</p>
 
       <h3>Shapes and vectors</h3>
-      <pre><code>a: vec f32 [ 2x2 ] [ 1.0 2.0, 3.0 4.0 ]
-b: vec f32 [ 2x2 ] [ 5.0 6.0, 7.0 8.0 ]
-c: a * b
-d: sqrt[ a ]
-cell: a[ 1, 0 ]</code></pre>
+      <pre><code>func shaped_math [] -> f32
+    a: vec f32 [ 2x2 ] [ 1.0 2.0, 3.0 4.0 ]
+    b: vec f32 [ 2x2 ] [ 5.0 6.0, 7.0 8.0 ]
+    c: a * b
+    d: sqrt[ a ]
+    return c[ 0, 0 ] + d[ 0, 0 ] + a[ 1, 0 ]</code></pre>
 
       <p>A shape is itself a value with a dimension count and total size.
         Shaped vectors accept one index per dimension. Arithmetic is
@@ -757,14 +890,15 @@ cell: a[ 1, 0 ]</code></pre>
       <p class="opening">Class objects are reference counted. Ordinary object
         members hold their value; manual members and raw pointers do not.</p>
 
-      <pre><code>n: i32 [ 41 ]
-p: @n
-p[ 0 ] += 1
-
-func bump [ value: ref i32 ]
+      <pre><code>func bump [ value: ref i32 ]
     value[ 0 ] += 1
 
-bump[ @n ]</code></pre>
+func pointer_example [] -> i32
+    n: i32 [ 41 ]
+    p: @n
+    p[ 0 ] += 1
+    bump[ @n ]
+    return n</code></pre>
 
       <p><code>@value</code> takes an address. <code>@Type</code> declares or
         converts a typed pointer. Pointer arithmetic is measured in bytes.
@@ -775,9 +909,11 @@ bump[ @n ]</code></pre>
       <pre><code>func mul_add [ a: i64, b: i64 :: base: i64, scale: i64 ] -&gt; i64
     return (a * b + base) * scale
 
-base: 10
-scale: 2
-work: lambda mul_add[ base, scale ]</code></pre>
+func closure_example [] -> i64
+    base: 10
+    scale: 2
+    work: lambda mul_add[ base, scale ]
+    return work[ 3, 4 ]</code></pre>
 
       <p>The arguments after <code>::</code> become explicit context. Inline
         lambdas infer and copy their captures at the point where the lambda is
@@ -811,8 +947,10 @@ work: lambda mul_add[ base, scale ]</code></pre>
 
       <pre><code>intern func c_fill [ @i32, i32, i32 ]
 
-values: local i32 [ 4 ]
-c_fill[ @values[ 0 ], 4, 10 ]</code></pre>
+func fill_example [] -> i32
+    values: local i32 [ 4 ]
+    c_fill[ @values[ 0 ], 4, 10 ]
+    return values[ 3 ]</code></pre>
 
       <h3>C++ keeps its language surface</h3>
       <p>Classes retain overloaded constructors, methods, operator overloads,
@@ -820,10 +958,50 @@ c_fill[ @values[ 0 ], 4, 10 ]</code></pre>
         integer template arguments, multiple template parameters, and
         namespaced function templates are supported.</p>
 
-      <pre><code>pair: pairT&lt;i64&gt; [ a: 40, b: 2 ]
-scaled_value: scaled&lt;i64,6&gt; [ v: 7 ]
-clamped: std::clamp&lt;i32&gt;[ 7, 1, 3 ]
-rect: geo2::rect2 [ ]</code></pre>
+      <h4><code>cpp.hpp</code></h4>
+      <pre><code>#pragma once
+#include &lt;algorithm&gt;
+
+template &lt;typename T&gt;
+struct pairT {
+    T a;
+    T b;
+    T sum() const { return a + b; }
+    T operator*(T k) const { return (a + b) * k; }
+};
+
+template &lt;typename T, int N&gt;
+struct scaled {
+    T v;
+    T out() const { return v * N; }
+};
+
+struct Ratio {
+    int num;
+    int den;
+    Ratio(int n, int d) : num(n), den(d) {}
+    operator float() const { return (float)num / den; }
+};</code></pre>
+
+      <h4><code>module.ag</code></h4>
+      <pre><code>import &lt;cpp.hpp&gt;
+
+func cpp_example [] -> bool
+    pair: pairT&lt;i64&gt; [ a: 40, b: 2 ]
+    factor: scaled&lt;i64,6&gt; [ v: 7 ]
+    ratio: Ratio [ ]
+    ratio.Ratio[ 3, 4 ]
+    value: f32 [ ratio ]
+    low: i32 [ 1 ]
+    limited: std::clamp&lt;i32&gt;[ 7, low, 3 ]
+    return pair.sum[] == 42 &amp;&amp; pair * 2 == 84
+        &amp;&amp; factor.out[] == 42 &amp;&amp; value == 0.75
+        &amp;&amp; limited == 3</code></pre>
+
+      <p>The <code>.hpp</code> import makes this a C++ translation unit. A C++
+        constructor appears as a method named after its type; templates,
+        operators, conversion operators, and <code>std</code> names keep their
+        source spelling on the Silver side.</p>
 
       <p>If a required specialization is absent from the header's explicit
         instances, the import translation unit requests it when silver source
