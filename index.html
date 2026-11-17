@@ -1,800 +1,945 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>silver, a native build language</title>
-<meta name="description" content="silver is a native systems language on LLVM. It has live reload,
-  imports that pull any dependency from git and build it with its own build system, and C/C++ interop
-  with no bindings. MIT licensed, 8 years in development.">
-<meta property="og:title" content="silver, a native build language">
-<meta property="og:description" content="A native systems language on LLVM with live reload, imports
-  straight from git, and C/C++ interop with no bindings. MIT licensed, self-hosting, in development
-  since 2017.">
+<title>silver — how the system works</title>
+<meta name="description" content="A technical introduction to silver: source imports, native modules, live replacement, runtime types, data layout, native interop, build-time execution, and tests.">
+<meta property="og:title" content="silver — how the system works">
+<meta property="og:description" content="Imports build their sources. Running modules can be replaced. C, C++, Rust, and silver share native memory.">
 <meta property="og:type" content="website">
 <link rel="icon" href="silver-icon.png">
 <style>
   :root {
-    --bg:#0b0d10; --bg2:#111419; --panel:#14181e; --line:#222831;
-    --fg:#e7ecf2; --mut:#97a3b2; --dim:#6c7787;
-    --ag:#c9d4e3;            /* silver text */
-    --acc:#7fb0ff; --acc2:#9b8cff;
-    --k:#7fb0ff; --t:#5fd6b5; --s:#e3b778; --c:#5c6675; --n:#d98ad1; --fn:#e7ecf2;
-    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    --bg: #0d1014;
+    --panel: #13171c;
+    --panel-2: #181d23;
+    --text: #e7e9ec;
+    --soft: #a8b0ba;
+    --faint: #737e8a;
+    --rule: #2b323b;
+    --accent: #8bb8e8;
+    --accent-soft: #18314a;
+    --code: #090b0e;
+    --green: #8dc8ae;
+    --amber: #d9b679;
+    --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono",
+      Consolas, monospace;
+    --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
   }
-  * { box-sizing:border-box; }
-  html { scroll-behavior:smooth; }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
-    margin:0; background:var(--bg); color:var(--fg);
-    font-family:var(--sans); line-height:1.6;
-    -webkit-font-smoothing:antialiased;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
   }
-  a { color:var(--acc); text-decoration:none; }
-  a:hover { text-decoration:underline; }
-  .wrap { max-width:980px; margin:0 auto; padding:0 24px; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:hover { color: #b6d6f7; }
+  code, pre { font-family: var(--mono); }
+  :not(pre) > code {
+    color: #d7e6f5;
+    font-size: .9em;
+  }
+  .frame {
+    width: min(1180px, calc(100% - 40px));
+    margin: 0 auto;
+  }
 
-  /* hero */
-  header.hero {
-    position:relative; overflow:hidden;
-    padding:96px 0 64px;
-    background:
-      radial-gradient(1100px 500px at 70% -10%, rgba(127,176,255,.10), transparent 60%),
-      radial-gradient(900px 500px at 10% 0%, rgba(155,140,255,.08), transparent 55%);
-    border-bottom:1px solid var(--line);
+  header {
+    padding: 42px 0 72px;
+    border-bottom: 1px solid var(--rule);
+    background: #0b0e12;
   }
-  .hero-bg {
-    position:absolute; inset:0; z-index:0;
-    background:url("silver-icon.png") no-repeat center right;
-    background-size:cover; opacity:.9;
-    transform:translateX(20%);
+  .topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 76px;
   }
-  .hero-bg::after {
-    content:""; position:absolute; inset:0;
-    background:
-      linear-gradient(90deg, var(--bg) 3%, rgba(11,13,16,.62) 42%, rgba(11,13,16,0) 82%),
-      linear-gradient(0deg, var(--bg) 1%, rgba(11,13,16,0) 38%),
-      linear-gradient(180deg, var(--bg) 0%, rgba(11,13,16,0) 32%);
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text);
+    text-decoration: none;
   }
-  header.hero > .wrap { position:relative; z-index:1; }
-  .hero-quote {
-    position:absolute; top:0; right:0; z-index:3;
-    white-space:nowrap;
-    font-family:var(--mono); font-style:italic; font-size:14px; line-height:1.5;
-    color:var(--ag);
-    padding:12px 18px;
-    background:linear-gradient(180deg, rgba(20,24,30,.62), rgba(14,18,24,.5));
-    border:1px solid var(--line); border-right:2px solid var(--acc);
-    border-radius:12px;
-    backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px);
-    box-shadow:0 12px 32px rgba(0,0,0,.38);
-  }
-  .hero-quote b { color:#fff; font-style:normal; }
-  .hero-quote::before { content:"\201C"; color:var(--acc); font-size:20px;
-    vertical-align:-3px; margin-right:3px; opacity:.85; }
-  .mark { display:flex; align-items:center; gap:16px; margin-bottom:28px; }
-  .mark img { width:54px; height:54px; border-radius:12px; }
-  .wordmark {
-    font-size:30px; font-weight:700; letter-spacing:-.5px;
-    background:linear-gradient(180deg,#fff,#aab6c6);
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-  }
-  .wordmark span { font-family:var(--mono); font-weight:600; font-size:15px;
-    -webkit-text-fill-color:var(--dim); margin-left:8px; }
+  .brand img { width: 38px; height: 38px; border-radius: 8px; }
+  .brand strong { font-size: 22px; letter-spacing: -.02em; }
+  .topline nav { display: flex; gap: 22px; font-size: 14px; }
+  .topline nav a { color: var(--soft); text-decoration: none; }
+  .topline nav a:hover { color: var(--text); }
   h1 {
-    font-size:clamp(34px,5.4vw,56px); line-height:1.08; letter-spacing:-1.2px;
-    margin:0 0 18px; font-weight:760; max-width:18ch;
+    max-width: 900px;
+    margin: 0;
+    font-size: clamp(42px, 6.6vw, 76px);
+    font-weight: 620;
+    line-height: 1.04;
+    letter-spacing: -.045em;
   }
-  h1 .g { background:linear-gradient(120deg,#cdd8e8,#7fb0ff 60%,#9b8cff);
-    -webkit-background-clip:text; background-clip:text; color:transparent; }
-  h1 .kw { font-family:var(--mono); color:var(--k); font-weight:600;
-    font-size:.74em; background:var(--panel); border:1px solid var(--line);
-    padding:.06em .34em; border-radius:8px; vertical-align:.06em; }
-  .lede { font-size:19px; color:var(--mut); max-width:62ch; margin:0 0 30px;
-    text-shadow:2px 2px 4px rgba(0,0,0,.7); }
-  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:32px; }
-  .badge {
-    font-family:var(--mono); font-size:12.5px; color:var(--ag);
-    background:var(--panel); border:1px solid var(--line);
-    padding:5px 11px; border-radius:999px;
+  .lead {
+    max-width: 800px;
+    margin: 28px 0 0;
+    color: var(--soft);
+    font-size: 20px;
+    line-height: 1.58;
   }
-  .badge b { color:#fff; font-weight:600; }
-  .cta { display:flex; flex-wrap:wrap; gap:12px; }
-  .btn {
-    display:inline-flex; align-items:center; gap:8px;
-    font-weight:600; font-size:15px; padding:12px 20px; border-radius:10px;
-    border:1px solid var(--line);
+  .basis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px 24px;
+    margin-top: 28px;
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 12px;
   }
-  .btn.primary { background:linear-gradient(180deg,#3b6fd4,#2f59b0); color:#fff; border-color:#3b6fd4; }
-  .btn.primary:hover { text-decoration:none; filter:brightness(1.07); }
-  .btn.ghost { background:var(--panel); color:var(--fg); }
-  .btn.ghost:hover { text-decoration:none; border-color:#33404e; }
 
-  /* sections */
-  section { padding:72px 0; border-bottom:1px solid var(--line); }
-  .eyebrow { font-family:var(--mono); font-size:12.5px; letter-spacing:1.5px;
-    text-transform:uppercase; color:var(--acc); margin:0 0 10px; }
-  h2 { font-size:clamp(26px,3.6vw,34px); letter-spacing:-.6px; margin:0 0 14px; }
-  h2 code { color:var(--k); font-family:var(--mono); font-weight:600; font-size:.74em;
-    background:var(--panel); border:1px solid var(--line); padding:.05em .32em; border-radius:8px; }
-  .sub { color:var(--mut); font-size:17px; max-width:64ch; margin:0 0 36px; }
-
-  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
-  .trio { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:28px; }
-  .card {
-    background:linear-gradient(180deg,var(--panel),var(--bg2));
-    border:1px solid var(--line); border-radius:14px; padding:24px;
+  .page {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 800px);
+    gap: 70px;
+    align-items: start;
+    padding: 58px 0 100px;
   }
-  .card h3 { margin:0 0 8px; font-size:18px; letter-spacing:-.3px; }
-  .card h3 .ic { color:var(--acc); font-family:var(--mono); margin-right:8px; }
-  .card p { margin:0; color:var(--mut); font-size:15px; }
-
-  /* code */
-  .code {
-    background:#0c0f13; border:1px solid var(--line); border-radius:14px;
-    overflow:hidden; margin:0 0 20px;
+  .contents {
+    position: sticky;
+    top: 24px;
+    font-size: 13px;
   }
-  .code .bar {
-    display:flex; align-items:center; gap:8px; padding:11px 16px;
-    border-bottom:1px solid var(--line); background:#0a0c10;
+  .contents strong {
+    display: block;
+    margin-bottom: 13px;
+    color: var(--faint);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
   }
-  .code .bar .dot { width:11px; height:11px; border-radius:50%; background:#2a323d; }
-  .code .bar .name { font-family:var(--mono); font-size:12.5px; color:var(--dim); margin-left:6px; }
-  pre { margin:0; padding:20px 22px; overflow-x:auto; }
-  code, pre { font-family:var(--mono); font-size:13.5px; line-height:1.7; }
-  pre .k { color:var(--k); }    /* keyword */
-  pre .t { color:var(--t); }    /* type */
-  pre .s { color:var(--s); }    /* string */
-  pre .c { color:var(--c); font-style:italic; }  /* comment */
-  pre .n { color:var(--n); }    /* number */
-  pre .f { color:var(--fn); }   /* function */
-  pre .m { color:var(--mut); }  /* muted/punct */
-
-  .two { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
-  .two .txt h3 { font-size:20px; margin:0 0 10px; letter-spacing:-.3px; }
-  .two .txt h3 code { font-size:1em; color:var(--k); }
-  .two .txt p { color:var(--mut); margin:0 0 14px; font-size:15.5px; }
-
-  /* built-with */
-  .builtwith { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-  .bw {
-    border:1px solid var(--line); border-radius:14px; padding:22px;
-    background:linear-gradient(180deg,var(--panel),var(--bg2));
+  .contents ol { margin: 0; padding: 0; list-style: none; }
+  .contents li { margin: 7px 0; }
+  .contents a { color: var(--soft); text-decoration: none; }
+  .contents a:hover { color: var(--text); text-decoration: underline; }
+  .contents .tests {
+    display: block;
+    margin-top: 23px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
   }
-  .bw h3 { margin:0 0 6px; font-size:18px; }
-  .bw .tag { font-family:var(--mono); font-size:12px; color:var(--acc); }
-  .bw p { color:var(--mut); font-size:14.5px; margin:8px 0 0; }
 
-  /* stats strip */
-  section.docker {
-    background:
-      radial-gradient(820px 380px at 80% 26%, rgba(127,176,255,.15), transparent 60%),
-      linear-gradient(180deg,#0c1016,#0b0d10);
+  main { min-width: 0; }
+  section {
+    padding-bottom: 64px;
+    margin-bottom: 64px;
+    border-bottom: 1px solid var(--rule);
+    scroll-margin-top: 24px;
   }
-  .whale { width:100%; max-width:400px; height:auto; display:block; margin:8px auto 0;
-    filter:drop-shadow(0 16px 38px rgba(127,176,255,.22)); }
-  .module { position:relative; width:100%; max-width:340px; margin:0 auto; }
-  .module img { width:100%; display:block;
-    filter:drop-shadow(0 18px 42px rgba(127,176,255,.34)); }
-  .module-chips {
-    position:absolute; left:11%; right:9%; top:35%; bottom:19%;
-    display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:1fr; gap:7px;
+  section:last-child { margin-bottom: 0; border-bottom: 0; }
+  .kicker {
+    display: block;
+    margin-bottom: 9px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
   }
-  .module-chips span {
-    display:flex; align-items:center; justify-content:center;
-    font-family:var(--mono); font-size:13px; font-weight:600; color:#eaf3ff;
-    background:rgba(8,16,28,.52); border:1px solid rgba(255,255,255,.45);
-    border-radius:6px;
+  h2, h3, h4 { line-height: 1.22; }
+  h2 {
+    margin: 0 0 17px;
+    font-size: clamp(30px, 4vw, 43px);
+    font-weight: 620;
+    letter-spacing: -.03em;
   }
-  .plat-cap { font-family:var(--mono); font-size:12px; letter-spacing:1px; text-transform:uppercase;
-    color:var(--dim); margin:26px 0 10px; }
-  .plats { display:flex; flex-wrap:wrap; gap:9px; }
-  .plat { font-family:var(--mono); font-size:13px; color:var(--ag); background:var(--panel);
-    border:1px solid var(--line); padding:7px 13px; border-radius:10px; }
-  .plat b { color:#fff; font-weight:600; }
-  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; text-align:center; }
-  .stat .num { font-size:34px; font-weight:730; letter-spacing:-1px;
-    background:linear-gradient(180deg,#fff,#9fb0c4); -webkit-background-clip:text;
-    background-clip:text; color:transparent; }
-  .stat .lab { color:var(--mut); font-size:13.5px; margin-top:4px; }
+  h3 {
+    margin: 38px 0 10px;
+    font-size: 23px;
+    font-weight: 620;
+    letter-spacing: -.015em;
+  }
+  h4 {
+    margin: 25px 0 7px;
+    color: #d9dce0;
+    font-size: 16px;
+    font-weight: 650;
+  }
+  p { margin: 0 0 17px; }
+  .opening { color: var(--soft); font-size: 18px; }
+  ul, ol { padding-left: 23px; }
+  li { margin: 7px 0; }
 
-  footer { padding:54px 0 70px; color:var(--dim); font-size:14px; }
-  footer .row { display:flex; flex-wrap:wrap; gap:18px 28px; align-items:center; justify-content:space-between; }
-  footer a { color:var(--mut); }
+  pre {
+    overflow-x: auto;
+    margin: 23px 0 26px;
+    padding: 20px 22px;
+    border: 1px solid #222831;
+    border-radius: 7px;
+    background: var(--code);
+    color: #e8edf2;
+    font-size: 13px;
+    line-height: 1.7;
+    tab-size: 4;
+  }
+  .comment { color: #73808d; }
+  .word { color: var(--accent); }
+  .type { color: var(--green); }
+  .literal { color: var(--amber); }
 
-  .more { margin-top:16px; display:inline-block; background:none; border:none; padding:0;
-    cursor:pointer; font-family:var(--sans); font-size:14px; font-weight:600; color:var(--acc); }
-  .more:hover { text-decoration:underline; }
-  dialog.sheet { inset:0; width:100%; height:100%; max-width:100%; max-height:100%;
-    border:none; background:transparent; padding:0; }
-  dialog.sheet[open] { display:grid; place-items:center; }
-  dialog.sheet::backdrop { background:rgba(4,6,9,.66); backdrop-filter:blur(4px); }
-  .sheet-in { position:relative; width:min(720px,92vw); max-height:86vh; overflow:auto;
-    color:var(--fg);
-    background:linear-gradient(180deg,var(--panel),var(--bg2)); border:1px solid var(--line);
-    border-radius:16px; padding:32px 32px 36px; box-shadow:0 30px 90px rgba(0,0,0,.55); }
-  .sheet-in code { color:var(--ag); }
-  .sheet-x { position:absolute; top:10px; right:16px; background:none; border:none; cursor:pointer;
-    color:var(--mut); font-size:26px; line-height:1; }
-  .sheet-x:hover { color:#fff; }
-  .sheet-in h3 { font-size:23px; letter-spacing:-.3px; margin:4px 0 14px; color:#fff; }
-  .sheet-in h4 { font-size:15px; margin:22px 0 8px; color:#fff; }
-  .sheet-in p { color:var(--mut); font-size:15px; margin:0 0 12px; }
-  .sheet-in .code { margin:12px 0; }
-  @media (max-width:720px){
-    .grid,.two,.builtwith,.trio { grid-template-columns:1fr; }
-    .hero-quote { position:static; white-space:normal; max-width:none; text-align:left; margin:0 0 24px;
-      border-right:1px solid var(--line); border-left:2px solid var(--acc); }
-    .stats { grid-template-columns:repeat(2,1fr); gap:28px 18px; }
-    header.hero { padding:64px 0 48px; }
+  .stages {
+    margin: 28px 0 30px;
+    padding: 0;
+    list-style: none;
+    counter-reset: stage;
+  }
+  .stages li {
+    position: relative;
+    min-height: 46px;
+    margin: 0;
+    padding: 0 0 22px 52px;
+    counter-increment: stage;
+  }
+  .stages li::before {
+    content: counter(stage);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #48647f;
+    border-radius: 50%;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 29px;
+    text-align: center;
+  }
+  .stages li::after {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 32px;
+    bottom: 0;
+    border-left: 1px solid var(--rule);
+  }
+  .stages li:last-child::after { display: none; }
+  .stages strong { display: block; margin-bottom: 3px; }
+  .stages span { color: var(--soft); }
+
+  .matrix {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    margin: 25px 0 29px;
+    border: 1px solid var(--rule);
+    background: var(--rule);
+  }
+  .matrix > div { padding: 18px 20px; background: var(--panel); }
+  .matrix strong { display: block; margin-bottom: 5px; }
+  .matrix p { margin: 0; color: var(--soft); font-size: 14px; }
+  .matrix code { color: var(--accent); }
+
+  .boundary {
+    margin: 25px 0;
+    padding: 18px 20px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    color: #cfdae5;
+  }
+  .boundary strong { color: var(--text); }
+
+  .dense {
+    display: grid;
+    grid-template-columns: 145px minmax(0, 1fr);
+    gap: 0 24px;
+    margin: 25px 0 0;
+  }
+  .dense dt {
+    padding: 13px 0;
+    border-top: 1px solid var(--rule);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .dense dd {
+    margin: 0;
+    padding: 12px 0;
+    border-top: 1px solid var(--rule);
+    color: var(--soft);
+  }
+  .dense dt:first-of-type, .dense dd:first-of-type { border-top: 0; }
+
+  .source-note {
+    margin-top: 28px;
+    color: var(--faint);
+    font-size: 13px;
+  }
+  .source-note a { color: var(--soft); }
+
+  footer {
+    padding: 35px 0 48px;
+    border-top: 1px solid var(--rule);
+    background: #0b0e12;
+    color: var(--faint);
+    font-size: 13px;
+  }
+  footer .frame {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px 24px;
+  }
+
+  @media (max-width: 850px) {
+    .frame { width: min(100% - 28px, 800px); }
+    .topline { margin-bottom: 54px; }
+    .topline nav { display: none; }
+    .page { display: block; padding-top: 30px; }
+    .contents {
+      position: static;
+      margin-bottom: 58px;
+      padding: 18px 20px;
+      border: 1px solid var(--rule);
+      background: var(--panel);
+      columns: 2;
+    }
+    .contents strong, .contents .tests { column-span: all; }
+  }
+
+  @media (max-width: 560px) {
+    header { padding-top: 28px; padding-bottom: 52px; }
+    h1 { font-size: 42px; }
+    .lead { font-size: 18px; }
+    .contents { columns: 1; }
+    .matrix { grid-template-columns: 1fr; }
+    .dense { grid-template-columns: 1fr; }
+    .dense dt { padding-bottom: 2px; }
+    .dense dd { padding-top: 2px; border-top: 0; }
+    pre { margin-left: -14px; margin-right: -14px; border-radius: 0; }
   }
 </style>
 </head>
 <body>
 
-<header class="hero">
-  <div class="hero-bg"></div>
-  <div class="wrap">
-    <div class="hero-quote">the application <b>is</b> the IDE&rdquo;</div>
-    <div class="mark">
-      <div class="wordmark">silver <span>v0.88</span></div>
+<header>
+  <div class="frame">
+    <div class="topline">
+      <a class="brand" href="https://github.com/ar-visions/silver">
+        <img src="silver-icon.png" alt="">
+        <strong>silver</strong>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#imports">Imports</a>
+        <a href="#replacement">Live replacement</a>
+        <a href="#native">Native code</a>
+        <a href="https://github.com/ar-visions/silver">Source</a>
+      </nav>
     </div>
-    <h1>A native build language whose <code class="kw">import</code> is <span class="g">open to the world</span>.</h1>
-    <p class="lede">silver compiles <code>.ag</code> source to native binaries through LLVM. One
-      import line clones a dependency, works out <em>its own</em> build system, builds it and links the
-      result. Save a file and your running app reloads, and the debugger works on every platform.</p>
-    <div class="badges">
-      <span class="badge"><b>8 years</b> in research</span>
-      <span class="badge"><b>~80k</b> lines</span>
-      <span class="badge"><b>LLVM</b> backend</span>
-      <span class="badge"><b>self-hosting</b> IDE</span>
-      <span class="badge"><b>MIT</b> license</span>
-    </div>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/ar-visions/silver">View on GitHub →</a>
-      <a class="btn ghost" href="#features">What it does</a>
+
+    <h1>A native language with its build graph inside the source.</h1>
+    <p class="lead">A silver module can fetch and build the code it imports,
+      expose native APIs without a binding layer, run typed work during its
+      build, and replace its own running image without restarting the process.</p>
+    <div class="basis">
+      <span>LLVM output</span>
+      <span>C ABI</span>
+      <span>reference-counted objects</span>
+      <span>runtime type graph</span>
+      <span>275 feature tests</span>
     </div>
   </div>
 </header>
 
-<section id="features">
-  <div class="wrap">
-    <p class="eyebrow">Why it's different</p>
-    <h2>An isolated environment, filled with best practice.</h2>
-    <p class="sub">Everything builds from source, LLVM included, all the way down to the Au runtime. It
-      all lands in one folder and leaves your system alone, and your apps build for every platform from
-      that same SDK. There's no package manager or binding layer to deal with, and the debugger works on
-      every platform we target.</p>
-    <div class="grid">
-      <div class="card">
-        <h3><span class="ic">import</span>Direct from authors</h3>
-        <p>Write <code>import owner:repo/commit</code>. silver clones it, detects CMake, Meson, Cargo, GN,
-          or autotools, builds it with that project's own tools, and links the output. C headers are parsed
-          through libclang and made available at design time.</p>
-        <button class="more" data-sheet="sheet-import">Read more →</button>
-      </div>
-      <div class="card">
-        <h3><span class="ic">↻</span>Live reload, built into the app</h3>
-        <p>The source watcher is compiled into the binary itself, so it isn't tied to an editor. A
-          silver app can watch its own source and rebuild in place, whether you're working on it or it's
-          been installed into <code>share</code>. Save a file and the app's built-in host swaps in the
-          new main module. There's no script or extra program, and the window stays open. The Vulkan
-          session keeps running while your module is replaced underneath it.</p>
-        <button class="more" data-sheet="sheet-live">Read more →</button>
-      </div>
-      <div class="card">
-        <h3><span class="ic">⚙</span>Debugging and tests built in</h3>
-        <p>Every build carries full LLDB debug info on Linux, macOS, Windows and embedded ARM, from
-          one source tree, so you can step, set breakpoints and look at variables anywhere. Mark a
-          function <code>expect func</code> and it becomes a test compiled into the module. <code>silver
-          --test app</code> runs every expect in the module and its imports and builds their arguments
-          for them, a live Vulkan context included. A release build runs the debug tests first, and the
-          release binary has no test code in it.</p>
-        <button class="more" data-sheet="sheet-debug">Read more →</button>
-      </div>
-      <div class="card">
-        <h3><span class="ic">.agi</span>A registry any tool can read</h3>
-        <p><code>export extensions ['.gen']</code> in a module writes <code>export/rgen.agi</code>
-          under the silver root when it builds. It's one plain text file per module, holding whatever
-          keys the module declares. orbiter reads it to open a <code>.gen</code> file and runs rgen in
-          its own process. Modules built years apart can find each other this way without being compiled
-          together.</p>
-      </div>
-      <div class="card">
-        <h3><span class="ic">↔</span>C/C++ with no bindings</h3>
-        <p>Declare a function in silver and write its body in a <code>.c</code> or <code>.cc</code>
-          file next to it. It compiles and links on its own, and the C side sees all your fields. C, C++
-          and silver share one object model, Au.</p>
-        <button class="more" data-sheet="sheet-interop">Read more →</button>
-      </div>
-    </div>
-  </div>
-</section>
+<div class="frame page">
+  <aside class="contents">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#module">Compilation unit</a></li>
+      <li><a href="#imports">Dependency builds</a></li>
+      <li><a href="#replacement">Live replacement</a></li>
+      <li><a href="#runtime">Runtime type graph</a></li>
+      <li><a href="#dispatch">Object model</a></li>
+      <li><a href="#data">Data and numeric model</a></li>
+      <li><a href="#ownership">Ownership and concurrency</a></li>
+      <li><a href="#native">Native code</a></li>
+      <li><a href="#design-time">Design-time execution</a></li>
+      <li><a href="#verification">Verification</a></li>
+      <li><a href="#surface">Language surface</a></li>
+    </ol>
+    <a class="tests" href="https://github.com/ar-visions/silver/blob/master/features/features.ag">Executable feature suite</a>
+  </aside>
 
-<section>
-  <div class="wrap">
-    <p class="eyebrow">The module</p>
-    <h2>One module, many languages.</h2>
-    <div class="two" style="align-items:center;">
-      <div>
-        <div class="module">
-          <img src="folder.png" alt="a silver module: a folder of source and resources">
-          <div class="module-chips">
-            <span>.ag</span>
-            <span>.c</span>
-            <span>.cc</span>
-            <span>.rs</span>
-            <span>css</span>
-            <span>png</span>
-          </div>
+  <main>
+    <section id="module">
+      <span class="kicker">Compilation unit</span>
+      <h2>The folder is the module.</h2>
+      <p class="opening">The <code>.ag</code> file defines the module. C, C++,
+        Rust, shaders, styles, images, and other resources beside it belong to
+        the same build and install unit.</p>
+
+      <p>There is no second manifest that repeats the source list. A bodyless
+        silver declaration can be implemented in a companion native file.
+        Resource folders are installed under the module's share path. Another
+        <code>.ag</code> file can join the module with <code>extend</code>.</p>
+
+      <pre><code><span class="word">export</span> 1.0.0
+<span class="word">export</span> extensions [ <span class="literal">'.scene'</span> ]
+
+<span class="word">import</span> &lt;stdio.h&gt;
+
+<span class="word">class</span> <span class="type">Image</span>
+    <span class="word">public</span> width : i32
+    <span class="word">public</span> height: i32
+    <span class="word">func</span> decode [ bytes: @u8, count: i64 ]
+
+<span class="comment"># Image_decode may live in the module's .c file.</span></code></pre>
+
+      <p>Exports are written to a plain AGI registry under the installation.
+        Programs can discover file types, launch properties, or other module
+        facts without linking the module that published them.</p>
+    </section>
+
+    <section id="imports">
+      <span class="kicker">Dependency builds</span>
+      <h2><code>import</code> resolves source, build, types, and link input.</h2>
+      <p class="opening">An import is a build-graph edge. Its spelling says
+        where the dependency comes from; its indented body says how that
+        dependency is configured and what the importing module consumes.</p>
+
+      <h3>The forms</h3>
+      <pre><code><span class="word">import</span> vec
+<span class="word">import</span> random <span class="word">with</span> RandomExtra <span class="word">as</span> rng
+<span class="word">import</span> &lt;stdio.h, limits.h&gt;
+
+<span class="word">import</span> madler:zlib/51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf &lt;zlib.h&gt;
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    -lz
+
+<span class="word">import</span> bzip2:bzip2/66c46b8c9436613fd81bc5d03f63a61933a4dcc3 \
+    &lt;bzlib.h&gt; <span class="word">from</span> gitlab
+
+<span class="word">import</span> https://example.org/data/table.bin
+    &gt; cp {import_file} {install}/share/app/data/table.bin</code></pre>
+
+      <p>A short name resolves a local module or an installed module. A
+        repository name can select an owner, project, submodule, commit, branch,
+        or remote service. <code>from</code> accepts a known service name, a
+        hostname, or a full repository URL. A raw HTTP URL means one file or
+        archive; it is not treated as a repository.</p>
+
+      <p><code>with</code> compiles one or more extension files into an imported
+        silver module. <code>as</code> changes the name used in the importing
+        source. An import of the current repository resolves to the local tree
+        rather than cloning itself.</p>
+
+      <h3>What happens to a repository import</h3>
+      <ol class="stages">
+        <li><strong>Resolve.</strong><span>The parser separates the remote,
+          owner, project, selected module, revision, headers, and local
+          configuration.</span></li>
+        <li><strong>Acquire.</strong><span>A full 40-character commit is fetched
+          shallowly into a detached checkout. A branch is cloned shallowly.
+          Short hashes use history because Git cannot fetch them by object ID.
+          Submodules are initialized recursively.</span></li>
+        <li><strong>Apply local changes.</strong><span>A sibling
+          <code>.diff</code> is applied once. A same-named overlay folder is
+          copied over the checkout on every build; a
+          <code>.deleted</code> list removes upstream files.</span></li>
+        <li><strong>Select the native build.</strong><span>The checkout is
+          inspected for CMake, Meson, GN, Cargo, a configure script, or a silver
+          module. Builds run outside the source tree.</span></li>
+        <li><strong>Install into the selected prefix.</strong><span>Native
+          dependencies build as release artifacts. Cross-target builds receive
+          target-specific CMake and Meson toolchain files and install under the
+          target's own prefix.</span></li>
+        <li><strong>Read the interface.</strong><span>Headers are parsed with
+          libclang. Functions, records, typedefs, constants, macros, namespaces,
+          and C++ templates enter silver's type graph. Libraries and frameworks
+          named in the import are added to the final link.</span></li>
+      </ol>
+
+      <h3>The indented body has defined roles</h3>
+      <div class="matrix">
+        <div>
+          <strong>Build arguments</strong>
+          <p>Ordinary tokens are passed to the selected build system. The
+            configuration is part of the cache identity.</p>
+        </div>
+        <div>
+          <strong>Environment</strong>
+          <p><code>NAME=value</code> lines reach configure and build commands
+            and also take part in the cache identity.</p>
+        </div>
+        <div>
+          <strong>Consumer inputs</strong>
+          <p><code>-I</code>, <code>-l</code>, framework names, bare
+            <code>-DNAME</code>, and silver defines marked with
+            <code>+NAME=value</code> feed the importing module.</p>
+        </div>
+        <div>
+          <strong>Commands</strong>
+          <p><code>&gt;</code> runs in the checkout before the normal build.
+            <code>&gt;&gt;</code> runs against the installed tree, including on a
+            cache hit.</p>
         </div>
       </div>
-      <div class="txt">
-        <p>A silver module is a folder. It holds the <code>.ag</code> source, its <code>.c</code> and
-          <code>.cc</code> files, shaders, the stylesheet and the assets, and they're built and
-          versioned together. You import the whole folder as one thing.</p>
-        <p>Few languages do this. The module is the <code>.ag</code> file plus any C, C++ or Rust
-          beside it, and GLSL and CSS go right in the source as { tokens } blocks.</p>
+
+      <p>Configuration may be conditional on platform or another define. A
+        module import may instead use <code>name: value</code> fields; those are
+        read-only parameters inside that module.</p>
+
+      <h3>The cache is based on build meaning</h3>
+      <p>The build stamp includes the configuration, environment, compiler
+        choice, C++ include mode, selected submodule, and every pre-build
+        command. A changed overlay is detected separately. Concurrent silver
+        processes take an exclusive lock per dependency, so one checkout is not
+        erased while another process is compiling it.</p>
+
+      <p>Direct URL downloads use a URL hash in the filename. They are first
+        written to a partial path and renamed only after a successful fetch, so
+        a failed transfer cannot become a valid cache entry.</p>
+
+      <div class="boundary">
+        <strong>Revision choice remains visible.</strong> A full commit gives a
+        pinned source state. A branch intentionally follows that branch. The
+        import line records which one the build asked for.
       </div>
-    </div>
-  </div>
-</section>
 
-<section>
-  <div class="wrap">
-    <p class="eyebrow">The import system</p>
-    <h2><code>import</code> Built the way the authors intend.</h2>
-    <p class="sub">There's no central registry. You depend on a commit or a branch, so a build comes
-      out the same every time, and the code comes straight from the people who wrote it.</p>
-    <div class="code">
-      <div class="bar"><span class="dot"></span><span class="name">app.ag</span></div>
-<pre><span class="k">import</span> KhronosGroup<span class="m">:</span>Vulkan-Headers<span class="m">/</span><span class="n">29184b9</span>
-<span class="k">import</span> glfw<span class="m">:</span>glfw<span class="m">/</span><span class="n">fdd14e6</span> <span class="t">&lt;GLFW/glfw3.h&gt;</span>
-    <span class="m">+</span>GLFW_INCLUDE_VULKAN
+      <p class="source-note">Implementation: <a href="https://github.com/ar-visions/silver/blob/master/src/silver.c">import parser and build graph</a>. Executed examples: <a href="https://github.com/ar-visions/silver/blob/master/features/features.ag">module tests</a>.</p>
+    </section>
 
-<span class="k">import</span> madler<span class="m">:</span>zlib<span class="m">/</span><span class="n">51b7f2a</span> <span class="t">&lt;zlib.h&gt;</span>
-    <span class="m">-</span>DCMAKE_POLICY_VERSION_MINIMUM<span class="m">=</span><span class="n">3.5</span>
+    <section id="replacement">
+      <span class="kicker">Live replacement</span>
+      <h2>The process stays up while the application image changes.</h2>
+      <p class="opening">On the desktop host, the application module is a
+        loadable native image. The host owns the frame loop and watches the
+        exact source and generated artifacts recorded by the last build.</p>
 
-<span class="c"># C headers too, with their macros and types at design time</span>
-<span class="k">import</span> <span class="t">&lt;stdio.h&gt;</span></pre>
-    </div>
-  </div>
-</section>
+      <h3>From an edit to a new frame</h3>
+      <ol class="stages">
+        <li><strong>Detect the edit.</strong><span>Each build writes a source
+          manifest. The host compares those files with the current product and
+          notices external rebuilds as well as direct source changes.</span></li>
+        <li><strong>Compile without stopping the app.</strong><span>The build
+          runs in another process. The old image keeps handling input and
+          drawing frames. A compile error is reported, but the last good image
+          remains live.</span></li>
+        <li><strong>Load a distinct image.</strong><span>The product is copied
+          to a unique temporary inode before <code>dlopen</code>, avoiding the
+          loader's same-inode cache. On Windows, copying also avoids holding the
+          product DLL open while the linker writes its successor.</span></li>
+        <li><strong>Initialize beside the running instance.</strong><span>The
+          new module starts on a worker thread in a separate Au type space. Its
+          types do not replace the live registry while initialization is still
+          in progress.</span></li>
+        <li><strong>Switch on a frame boundary.</strong><span>The host hands off
+          frame-owned work, pauses callbacks into the old image, removes the old
+          module from the type registry, promotes the prepared type space, and
+          points the frame loop at the new entry points.</span></li>
+        <li><strong>Retire the old image safely.</strong><span>Destruction runs
+          on a worker. The host waits for async work still executing old code,
+          drains reference-counted objects while their type code remains
+          mapped, then closes the old library.</span></li>
+      </ol>
 
-<section>
-  <div class="wrap">
-    <p class="eyebrow">Interoperability</p>
-    <h2>C and C++, sharing one object model.</h2>
-    <p class="sub">silver, C and C++ all run on one C runtime, <strong>Au</strong>, where every type
-      is described by one schema node. Nothing differs between them, so there's no binding layer to
-      write.</p>
+      <p>The new instance can render before the handoff while the old instance
+        still presents. In Trinity applications the window, graphics device,
+        swapchain owner, and host microphone are outside the replaced module.
+        The new instance initially defers taking the swapchain and adopts it at
+        the switch.</p>
 
-    <div class="two">
-      <div class="txt">
-        <h3>Everything is an <code>Au_t</code></h3>
-        <p>Structs, classes, enums and their members all come down to one type descriptor. An
-          <code>Au_t</code> holds a type's members, methods, vtable, size and traits. The runtime
-          handles reflection, reference counting and single inheritance, so each language doesn't have
-          to.</p>
-        <h3>The schema node</h3>
-        <p>You declare a type once as a schema: its members, methods, overrides and constructors. That
-          schema produces the same <code>Au_t</code> whether you wrote the type in silver or in C. The
-          memory layout matches, so a field is the same field on either side.</p>
-        <h3>Imported at design time</h3>
-        <p>C and C++ headers are read through libclang as you build, and their macros, structs and
-          functions become <code>Au_t</code> nodes too. A Vulkan handle or a zlib struct works like any
-          other type in your program, with no wrapper around it.</p>
+      <h3>State has explicit routes across the boundary</h3>
+      <pre><code><span class="word">persist</span> reloads: i64 [ 0 ]
+
+<span class="word">app</span> Example
+    <span class="word">func</span> init []
+        reloads += 1</code></pre>
+
+      <p>A <code>persist</code> slot is held from the old image, loaded into the
+        new image before initialization, and released from the old slot after
+        promotion. Its type cannot be defined by the module being unloaded;
+        otherwise the value would outlive its own type code.</p>
+
+      <p>Application frameworks can carry richer state through their own stable
+        owner. Trinity keeps the window and display objects outside the
+        replaceable image and lets the new instance adopt visible state. An app
+        can also save reload-specific state during destruction; the host marks
+        reload teardown separately from final process exit.</p>
+
+      <h3>Automatic or staged</h3>
+      <p>The host can build and apply immediately, or stage the change. In
+        staged mode the application sees four useful states: unchanged,
+        waiting for approval, compiling, and ready to switch. This lets an
+        editor or a full-screen application choose the exact handoff moment and
+        finish a visual transition first. Externally produced builds follow the
+        same staging path.</p>
+
+      <h3>The boundary is enforced</h3>
+      <p>Only the application image is replaced. If a loaded silver dependency
+        has been rebuilt since process start, the host refuses the swap and asks
+        for a restart; continuing with the old dependency image and a new layout
+        would be unsafe. A torn library copy is retried. A failed load leaves
+        the current instance running.</p>
+
+      <div class="boundary">
+        <strong>Platform scope.</strong> This path is used by the desktop live
+        host. Sealed iOS and Android packages load their application image once
+        and do not offer live replacement inside the installed package.
       </div>
-      <div class="code">
-        <div class="bar"><span class="dot"></span><span class="name">image.ag  +  image.c</span></div>
-<pre><span class="c"># image.ag: declare in silver, leave the body out</span>
-<span class="k">class</span> <span class="t">image</span>
-    <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
-    <span class="k">public</span> w<span class="m">:</span> <span class="t">i32</span>
-    <span class="k">public</span> h<span class="m">:</span> <span class="t">i32</span>
-    <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>
 
-<span class="c">// image.c: implement in C, with full field access</span>
-<span class="t">none</span> <span class="f">image_decode</span>(<span class="t">image</span> self) <span class="m">{</span>
-    FILE* f <span class="m">=</span> fopen(self<span class="m">-&gt;</span>uri<span class="m">-&gt;</span>chars, <span class="s">"rb"</span>);
-    <span class="c">// self-&gt;w and self-&gt;h are the same fields silver sees</span>
-    <span class="m">...</span>
-<span class="m">}</span>
+      <p class="source-note">Implementation: <a href="https://github.com/ar-visions/silver/blob/master/src/silver-host.c">desktop host</a>, <a href="https://github.com/ar-visions/silver/blob/master/src/aether.c">generated live entry points</a>, and <a href="https://github.com/ar-visions/silver/blob/master/src/silver.c">persist validation</a>.</p>
+    </section>
 
-<span class="c"># it just links: no wrapper in between</span></pre>
+    <section id="runtime">
+      <span class="kicker">Runtime type graph</span>
+      <h2>Types are available as data.</h2>
+      <p class="opening">Each module, class, struct, enum, member, method,
+        constructor, cast, operator, getter, and setter has an <code>Au_t</code>
+        descriptor. Compiled code and runtime tools read the same graph.</p>
+
+      <p><code>typeid</code> accepts a static type or a value. Runtime checks can
+        compare exact identity or walk inheritance. Members are searchable by
+        name and kind, including non-public members when the caller has the
+        module context.</p>
+
+      <pre><code>class Range &lt; string &gt;
+    public [ Launch, Slider [ 0.0, 1.0 ] ] value: f32
+    action func reset []
+        value = 0.0
+
+t: Au_t [ typeid[ Range ] ]
+m: Au.find_member[ t, 'value', AU_MEMBER_VAR, 0, false ]</code></pre>
+
+      <dl class="dense">
+        <dt>Metadata</dt>
+        <dd>A type and each member can carry one or two typed metadata objects.
+          Tools can find controls, launch fields, shader bindings, or other
+          interfaces without a parallel schema.</dd>
+        <dt>Actions</dt>
+        <dd>An <code>action func</code> is marked as a host-callable operation.
+          It remains an ordinary typed method when called by silver code.</dd>
+        <dt>Attributes</dt>
+        <dd><code>attrib</code> creates a static declaration-time object. Its
+          value is available through the member descriptor.</dd>
+        <dt>Serialization</dt>
+        <dd>AGI writing and parsing use the graph. The tests round-trip nested
+          structs, vectors of objects, Unicode field names, null fields, and
+          ordinary scalars.</dd>
+        <dt>Arguments</dt>
+        <dd>The command-line reader maps <code>--name value</code> to public
+          members and the bare argument to the member marked
+          <code>default</code>.</dd>
+        <dt>Registry</dt>
+        <dd>Module exports are written as AGI. A process can find a module by
+          name at runtime; live replacement removes the old descriptors and
+          promotes the prepared descriptors at the handoff.</dd>
+      </dl>
+    </section>
+
+    <section id="dispatch">
+      <span class="kicker">Object model</span>
+      <h2>Dispatch is a call-site decision.</h2>
+      <p class="opening">Class methods call directly by default. Add
+        <code>*</code> when the call must follow the runtime type.</p>
+
+      <pre><code>class Shape
+    public sides: i32
+    func name [] -&gt; string [ 'shape' ]
+
+Shape Triangle
+    sides: 3
+    func name [] -&gt; string [ 'triangle' ]
+
+base: Shape* [ Triangle [] ]
+static_name: base.name[]
+dynamic_name: base.name*[]</code></pre>
+
+      <p>The direct form preserves a visible, optimizable call target. The
+        dynamic form uses the object's runtime type. <code>super</code> reaches
+        the base implementation. Abstract classes and abstract members enforce
+        that a concrete subtype supplies the missing behavior.</p>
+
+      <h3>Member declarations carry policy</h3>
+      <div class="matrix">
+        <div><strong><code>public</code> / <code>mutable</code></strong><p>Public
+          read access, with external writes enabled only for mutable members.</p></div>
+        <div><strong><code>intern</code></strong><p>Visible to cooperating code in
+          the module, absent from the exported interface.</p></div>
+        <div><strong><code>expect</code></strong><p>Required construction input.
+          Construction fails when the value is missing.</p></div>
+        <div><strong><code>context</code></strong><p>Bound by type from an existing
+          context instead of threaded through every intermediate call.</p></div>
+        <div><strong><code>manual</code> / <code>unmanaged</code></strong><p>A raw
+          object slot that does not take or release a reference.</p></div>
+        <div><strong><code>static</code> / <code>persist</code></strong><p>One slot
+          per type, with persist adding transfer to the next live image.</p></div>
       </div>
-    </div>
 
-    <div class="trio">
-      <div class="card">
-        <h3><span class="ic">Au_t</span>One descriptor</h3>
-        <p>Structs, classes, enums and their members are the same kind of node, so there's one model
-          to learn.</p>
-      </div>
-      <div class="card">
-        <h3><span class="ic">{ }</span>One schema</h3>
-        <p>The schema generates the C struct and the silver type with the same layout, so nothing gets
-          converted at the boundary.</p>
-      </div>
-      <div class="card">
-        <h3><span class="ic">&lt; &gt;</span>One namespace</h3>
-        <p>Imported C and C++ types are read through libclang at design time and used directly,
-          without wrappers.</p>
-      </div>
-    </div>
-  </div>
-</section>
+      <p>Classes support typed constructors, post-construction conversions,
+        <code>init</code>, operators, casts, getters, setters, and indexers. A
+        change block under a member runs after later stores. Method declarations
+        may keep their signatures in the class while placing the body elsewhere
+        as <code>func Type.method</code>.</p>
+    </section>
 
-<section class="docker">
-  <div class="wrap">
-    <p class="eyebrow">Cross-platform · Docker integrated</p>
-    <div class="two" style="align-items:center;">
-      <div class="txt">
-        <h2 style="margin-top:0;">The compiler ships Docker inside it.</h2>
-        <p>Cross-compiling usually means keeping a stack of toolchains working. silver has Docker
-          built into the compiler. Name a target and it builds an image from that platform's Dockerfile,
-          then runs the <em>whole</em> build inside it against that platform's SDK: your dependencies'
-          CMake, Meson, GN or autotools builds, then <code>llc</code>, <code>clang</code> and the final
-          link.</p>
-        <p>You don't manage the container yourself. silver builds the image if it's missing, mounts
-          the SDK and sorts out the Docker permissions. It's one command for any target:</p>
-        <div class="code" style="margin-top:14px;">
-          <div class="bar"><span class="dot"></span><span class="name">shell</span></div>
-<pre><span class="m">$</span> silver <span class="k">--platform</span> linux-aarch64 orbiter
-<span class="c"># → builds the image, compiles + links inside it, emits an arm64 binary</span>
-<span class="c"># silver [flags] module [app-args]: args after the module go to the app</span></pre>
-        </div>
-      </div>
-      <div>
-        <svg class="whale" viewBox="0 0 24 24" role="img" aria-label="Docker" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#dde6f2"/>
-              <stop offset=".55" stop-color="#7fb0ff"/>
-              <stop offset="1" stop-color="#9b8cff"/>
-            </linearGradient>
-          </defs>
-          <path fill="url(#wg)" d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/>
-        </svg>
-      </div>
-    </div>
+    <section id="data">
+      <span class="kicker">Data and numeric model</span>
+      <h2>Layout and units remain in the type system.</h2>
+      <p class="opening">Structs use native C layout and pass by value. Vectors
+        are typed contiguous storage. Scalars attach a unit to a number, and
+        shapes attach dimensions to storage.</p>
 
-    <p class="plat-cap">Platforms</p>
-    <div class="plats">
-      <span class="plat">macOS</span>
-      <span class="plat">iOS</span>
-      <span class="plat">Linux</span>
-      <span class="plat">Android</span>
-      <span class="plat">Windows</span>
-      <span class="plat">NVIDIA Jetson</span>
-    </div>
-    <p class="plat-cap">Architectures</p>
-    <div class="plats">
-      <span class="plat">x86_64</span>
-      <span class="plat">x86</span>
-      <span class="plat">arm64</span>
-      <span class="plat">arm32</span>
-      <span class="plat">mips</span>
-      <span class="plat">riscv64</span>
-    </div>
-  </div>
-</section>
+      <h3>Value types follow the ABI</h3>
+      <pre><code>struct v2
+    x: f32
+    y: f32
 
-<section>
-  <div class="wrap">
-    <div class="two">
-      <div class="txt">
-        <p class="eyebrow">The language</p>
-        <h2>Succinct and explicit.</h2>
-        <h3>Polymorphism you opt into</h3>
-        <p>Calls are direct by default. A static call has no vtable cost, so LLVM can inline, fold
-          constants and vectorize across it. When you want dynamic dispatch you write <code>*</code>, so
-          you can see in the code where you pay for it.</p>
-        <h3>Units as types, shapes as literals</h3>
-        <p><code>200px</code> and <code>200em</code> are distinct types with compile-time conversions.
-          <code>new f32 [32x32x1]</code> allocates a typed tensor. That comes in handy for graphics, DSP
-          and neural networks.</p>
-      </div>
-      <div class="code">
-        <div class="bar"><span class="dot"></span><span class="name">trinity.ag</span></div>
-<pre><span class="c"># trinity's base app; the hot-reloaded module subclasses it</span>
-<span class="k">abstract</span> <span class="t">live_app</span> <span class="t">media_app</span>
-    <span class="k">context</span> w           <span class="m">:</span> <span class="t">Display*</span>     <span class="c"># bound from scope; '*' = any subtype</span>
-    <span class="k">context</span> vk          <span class="m">:</span> <span class="t">vk_context</span>   <span class="c"># the renderer, never passed in</span>
-    <span class="k">intern</span>  frames      <span class="m">:</span> <span class="t">i32</span>
-    <span class="k">intern</span>  next_second <span class="m">:</span> <span class="t">i64</span>
-    <span class="k">public</span>  width       <span class="m">:</span> <span class="t">i32</span>
+    operator + [ b: v2 ] -&gt; v2
+        return v2 [ x: x + b.x, y: y + b.y ]
 
-    <span class="k">func</span> <span class="f">frame</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">bool</span>
-        <span class="f">glfwPollEvents</span> <span class="m">[</span> <span class="m">]</span>
-        second <span class="m">:</span> <span class="f">epoch_millis</span> <span class="m">[</span> <span class="m">]</span> <span class="m">/</span> <span class="n">1000</span>
-        <span class="k">if</span> <span class="m">[</span> next_second <span class="m">!=</span> second <span class="m">]</span>
-            next_second <span class="m">=</span> second
-            <span class="f">puts</span> <span class="s">'fps={frames} draw={vk.draw_us}us'</span>
-            frames <span class="m">=</span> <span class="n">0</span>
-        <span class="f">render</span><span class="k">*</span><span class="m">[</span> <span class="m">]</span>                  <span class="c"># explicit dynamic dispatch</span>
-        <span class="k">return</span> !<span class="f">glfwWindowShouldClose</span> <span class="m">[</span> w.glfw <span class="m">]</span>
+    func dot [ b: v2 ] -&gt; f32
+        return x * b.x + y * b.y</code></pre>
 
-    <span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span>                   <span class="c"># overridden by the live subclass</span>
-        <span class="k">return</span></pre>
-      </div>
-    </div>
-  </div>
-</section>
+      <p>A struct can be built positionally or by field name and can define
+        methods, operators, and conversions. Values move correctly through
+        local arrays, vectors, pointers, object members, nested calls, and
+        native function returns. Small and large return values use the target's
+        normal C ABI.</p>
 
-<section>
-  <div class="wrap">
-    <p class="eyebrow">Member access</p>
-    <h2>Less to pass around.</h2>
-    <p class="sub">Visibility and context are part of a type, so the compiler can hand data to where
-      it's needed and keep modules apart.</p>
+      <h3>Units are distinct scalar types</h3>
+      <pre><code>scalar mm: f32
+    cast -&gt; cm [ a / 10.0 ]
+    construct [ v: cm ] [ v * 10.0 ]
 
-    <div class="two">
-      <div class="txt">
-        <h3><code>context</code>: bound from scope, by type</h3>
-        <p>A context member is filled in automatically from a value of its type that's already in
-          scope, like the Vulkan context, the active window or the allocator. You declare it once and
-          it's there, without passing it through every call in between. You can still set it yourself
-          when you want to.</p>
-        <h3><code>intern</code>: visible to the whole module</h3>
-        <p>An intern member is visible across the whole <em>module</em>, not only its class, so types
-          that work together can share state without exporting it. That keeps dependencies inside the
-          module, and you don't need <code>friend</code>-style workarounds.</p>
-        <h3><code>expect</code>: the user must provide it</h3>
-        <p>An expect member is part of the public surface, and the compiler won't let you make an
-          instance without it. Leave it out and the build fails and names what's missing, so a
-          configuration mistake shows up when you compile instead of when you run. Context members are
-          required the same way.</p>
-      </div>
-      <div class="code">
-        <div class="bar"><span class="dot"></span><span class="name">element.ag</span></div>
-<pre><span class="k">class</span> <span class="t">element</span>
-    <span class="k">context</span> vk  <span class="m">:</span> <span class="t">vk_context</span>   <span class="c"># bound from scope, by type</span>
-    <span class="k">context</span> ux  <span class="m">:</span> <span class="t">Window</span>       <span class="c"># never passed in</span>
-    <span class="k">intern</span>  fd  <span class="m">:</span> <span class="t">i32</span> <span class="n">-1</span>      <span class="c"># module-visible, not exported</span>
-    <span class="k">expect</span> uri <span class="m">:</span> <span class="t">path</span>         <span class="c"># the user must provide this</span>
-    <span class="k">public</span>  id  <span class="m">:</span> <span class="t">string</span>       <span class="c"># part of the public surface</span>
+distance: 254mm
+width: 200px
+delay: 16ms</code></pre>
 
-    <span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span>
-        vk.<span class="f">begin</span> <span class="m">[</span> <span class="m">]</span>            <span class="c"># vk is simply here</span>
-        ux.<span class="f">invalidate</span> <span class="m">[</span> <span class="m">]</span></pre>
-      </div>
-    </div>
-  </div>
-</section>
+      <p>A scalar can define construction and casts between units and can
+        override its text form. Integer-backed units reject fractional values.
+        Arguments written without commas can be matched by type, so distinct
+        unit types can determine their own parameter positions.</p>
 
-<section>
-  <div class="wrap">
-    <p class="eyebrow">Built in silver</p>
-    <h2>It compiles its own tools.</h2>
-    <p class="sub">About a quarter of the code, the IDE and the renderer, is written in silver. We
-      build our own tools in it because that's the best test of a language.</p>
-    <div class="builtwith">
-      <div class="bw">
-        <span class="tag">IDE</span>
-        <h3>orbiter</h3>
-        <p>The development environment for silver, written in silver and running on trinity. It edits
-          and live-reloads itself.</p>
-      </div>
-      <div class="bw">
-        <span class="tag">ENGINE</span>
-        <h3>trinity</h3>
-        <p>A Vulkan composition engine with an SDF canvas on compute. orbiter is built on it.</p>
-      </div>
-    </div>
-  </div>
-</section>
+      <h3>Shapes and vectors</h3>
+      <pre><code>a: vec f32 [ 2x2 ] [ 1.0 2.0, 3.0 4.0 ]
+b: vec f32 [ 2x2 ] [ 5.0 6.0, 7.0 8.0 ]
+c: a * b
+d: sqrt[ a ]
+cell: a[ 1, 0 ]</code></pre>
 
-<section>
-  <div class="wrap">
-    <p class="eyebrow">trinity engine</p>
-    <h2>Declarative UX, CSS with your properties.</h2>
-    <p class="sub">The IDE, orbiter, is built on trinity: a Vulkan composition engine whose canvas
-      draws vector shapes as signed-distance fields on the compute pipeline. The whole interface is
-      written in a CSS dialect, and layers, transitions and filters are part of the stylesheet
-      language.</p>
+      <p>A shape is itself a value with a dimension count and total size.
+        Shaped vectors accept one index per dimension. Arithmetic is
+        element-wise; scalars broadcast; numeric built-ins such as square root,
+        min, max, and clamp map over vectors.</p>
 
-    <div class="two">
-      <div class="txt">
-        <h3>SDF canvas on Vulkan compute</h3>
-        <p>Rounded rects, paths and strokes are computed as signed-distance fields by a compute
-          shader, written to a storage image and then composited. They stay sharp at any scale, come out
-          antialiased and stay on the GPU. No CPU rasterizer is involved.</p>
-        <h3>Layers, not element trees</h3>
-        <p>One element has named render layers (<code>layers.base</code>, <code>layers.inner</code>,
-          <code>layers.border</code>), each with its own area, fill, stroke and glow. One element can do
-          what would take a nested subtree elsewhere, so you write much less.</p>
-        <h3>Transitions &amp; low-pass, in the CSS</h3>
-        <p>A property animates by adding its timing: <code>fill_color: #4af, 222ms cubic</code>.
-          Shader inputs that change get smoothed by a low-pass filter written the same way:
-          <code>pulse_width: 1.0, filter 0.8</code>. You describe the motion and the smoothing in the
-          stylesheet instead of wiring them up in code.</p>
-      </div>
-      <div class="code">
-        <div class="bar"><span class="dot"></span><span class="name">orbiter.css</span></div>
-<pre><span class="c">/* one element with several layers, not a tree */</span>
-<span class="t">Group / Check</span> {
-    <span class="k">layers.base</span>:
-        area:         l0.5 t0.5 w1.0 h1.0
-        fill_color:   <span class="s">#0004</span>
-        stroke_color: <span class="s">#fff4</span>
-        radius:       <span class="n">9</span>
-    <span class="k">layers.inner</span>:
-        fill_color:   <span class="s">#4af0</span>, <span class="n">222ms cubic</span>   <span class="c">/* transition */</span>
-        inner_glow:   <span class="s">#fff0</span> 8, <span class="n">222ms cubic</span>
+      <dl class="dense">
+        <dt><code>local T[n]</code></dt>
+        <dd>Fixed or runtime-sized stack storage with direct address access.</dd>
+        <dt><code>vec T[n]</code></dt>
+        <dd>Contiguous typed storage. Initial capacity is inline; growth moves
+          elements to a heap allocation without changing vector identity.</dd>
+        <dt><code>vec T[]</code></dt>
+        <dd>A growable vector. Push, insert, shift, pop, remove, reverse,
+          concatenate, search, clear, and element-wise conversion are built in.</dd>
+        <dt><code>map V[K]</code></dt>
+        <dd>A typed map whose bracketed type is the key. Its initial hash size
+          can be specified, and iteration yields value then key.</dd>
+      </dl>
+    </section>
 
-<span class="t">:selected</span>
-    <span class="k">layers.inner</span>:
-        fill_color:   <span class="s">#4af</span>,  <span class="n">222ms cubic</span>
-        stroke_color: <span class="s">#fff8</span>
-}</pre>
-      </div>
-    </div>
+    <section id="ownership">
+      <span class="kicker">Ownership and concurrency</span>
+      <h2>Reference changes are observable.</h2>
+      <p class="opening">Class objects are reference counted. Ordinary object
+        members hold their value; manual members and raw pointers do not.</p>
 
-    <p class="plat-cap">And the elements themselves are one expression</p>
-    <div class="code">
-      <div class="bar"><span class="dot"></span><span class="name">orbiter.ag</span></div>
-<pre><span class="c"># the whole finder bar as one declarative expression</span>
-<span class="k">func</span> <span class="f">render</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">Elements</span> <span class="m">[</span>
-    find<span class="m">:</span>    <span class="t">element</span> <span class="m">[</span> label<span class="m">:</span> <span class="s">'Find'</span>,    edit<span class="m">:</span> findbar_text <span class="m">]</span>
-    replace<span class="m">:</span> <span class="t">element</span> <span class="m">[</span> label<span class="m">:</span> <span class="s">'Replace'</span>, edit<span class="m">:</span> replace_text <span class="m">]</span>
-    pattern<span class="m">:</span> <span class="t">Option</span>  <span class="m">[</span> label<span class="m">:</span> <span class="s">'Files'</span>,   selected<span class="m">:</span> files_sel <span class="m">]</span>
-    nav<span class="m">:</span>     <span class="t">element</span> <span class="m">[</span> topmost<span class="m">:</span> <span class="k">true</span>,    elements<span class="m">:</span> nav <span class="m">]</span>
-<span class="m">]</span></pre>
-    </div>
-  </div>
-</section>
+      <pre><code>n: i32 [ 41 ]
+p: @n
+p[ 0 ] += 1
 
-<section>
-  <div class="wrap">
-    <div class="stats">
-      <div class="stat"><div class="num">2017</div><div class="lab">first commit</div></div>
-      <div class="stat"><div class="num">~80k</div><div class="lab">lines of code</div></div>
-      <div class="stat"><div class="num">~27k</div><div class="lab">written in silver</div></div>
-      <div class="stat"><div class="num">4</div><div class="lab">platforms targeted</div></div>
-    </div>
-  </div>
-</section>
+func bump [ value: ref i32 ]
+    value[ 0 ] += 1
 
-<section style="border-bottom:none;">
-  <div class="wrap" style="text-align:center;">
-    <h2>Read the source.</h2>
-    <p class="sub" style="margin:0 auto 28px;">A compiler written in C on LLVM, a Python build
-      pipeline, and the language compiling itself. MIT licensed.</p>
-    <div class="cta" style="justify-content:center;">
-      <a class="btn primary" href="https://github.com/ar-visions/silver">github.com/ar-visions/silver →</a>
-    </div>
-  </div>
-</section>
+bump[ @n ]</code></pre>
+
+      <p><code>@value</code> takes an address. <code>@Type</code> declares or
+        converts a typed pointer. Pointer arithmetic is measured in bytes.
+        Vectors passed to native pointer parameters expose their element
+        storage rather than the vector object.</p>
+
+      <h3>Closures own their context</h3>
+      <pre><code>func mul_add [ a: i64, b: i64 :: base: i64, scale: i64 ] -&gt; i64
+    return (a * b + base) * scale
+
+base: 10
+scale: 2
+work: lambda mul_add[ base, scale ]</code></pre>
+
+      <p>The arguments after <code>::</code> become explicit context. Inline
+        lambdas infer and copy their captures at the point where the lambda is
+        made. A lambda stored in a member holds that context past the creating
+        stack frame and releases it when the lambda is freed.</p>
+
+      <h3>Async work uses the same closure model</h3>
+      <p>An <code>async</code> object applies a work lambda to a vector of objects
+        on worker threads. Captured objects remain held for the work, and
+        <code>sync[ null ]</code> joins it. The live host also tracks workers by
+        image, which is why a module is not unmapped while one of its async
+        callbacks can still run.</p>
+
+      <p>The memory tests capture and touch a 10 MB object, drain the automatic
+        object pool, verify that the closure released it, and check that the
+        resident memory returned. The suite also records the live-object count
+        at its first test and compares the final count after a full drain.</p>
+    </section>
+
+    <section id="native">
+      <span class="kicker">Native code</span>
+      <h2>C, C++, and Rust use the same memory.</h2>
+      <p class="opening">Companion source is compiled with the module. Imported
+        headers become typed silver declarations at design time.</p>
+
+      <h3>C is direct</h3>
+      <p>C integer spellings, records, typedefs, fixed arrays, function
+        pointers, varargs, constants, and macros are usable as declared. A
+        silver string crosses to a C string where required. C can write into a
+        silver local array or vector through its native address.</p>
+
+      <pre><code>intern func c_fill [ @i32, i32, i32 ]
+
+values: local i32 [ 4 ]
+c_fill[ @values[ 0 ], 4, 10 ]</code></pre>
+
+      <h3>C++ keeps its language surface</h3>
+      <p>Classes retain overloaded constructors, methods, operator overloads,
+        and conversion operators. Namespaces remain qualified. Type templates,
+        integer template arguments, multiple template parameters, and
+        namespaced function templates are supported.</p>
+
+      <pre><code>pair: pairT&lt;i64&gt; [ a: 40, b: 2 ]
+scaled_value: scaled&lt;i64,6&gt; [ v: 7 ]
+clamped: std::clamp&lt;i32&gt;[ 7, 1, 3 ]
+rect: geo2::rect2 [ ]</code></pre>
+
+      <p>If a required specialization is absent from the header's explicit
+        instances, the import translation unit requests it when silver source
+        first uses that type.</p>
+
+      <h3>Rust and inline assembly</h3>
+      <p>A Cargo import builds the release crate into the selected target prefix
+        and uses cbindgen for its external C surface when available. A module's
+        Rust companion reads and writes the same buffers used by silver and C++.
+        Architecture-gated assembly supports x86-64 and ARM64, including typed
+        expression results returned from a named register.</p>
+    </section>
+
+    <section id="design-time">
+      <span class="kicker">Design-time execution</span>
+      <h2>Typed code can produce part of the build.</h2>
+      <p class="opening"><code>export func</code> runs after module
+        initialization during the build. It can generate an artifact with the
+        same language and types used by the application.</p>
+
+      <pre><code>export func bake_table []
+    output: path '{path.path_share_path[]}/data/table.txt'
+    output.save[ make_table[], null ]</code></pre>
+
+      <p>The tested pattern hashes the source token of the producer, compares
+        that stamp with the installed artifact, and runs only when the producer
+        changed. <code>silver --export</code> forces the export path when a fresh
+        artifact is required.</p>
+
+      <h3>A configured coding agent can supply a function body</h3>
+      <pre><code>func gcd [ a: i64, b: i64 ] -&gt; i64 using claude
+    { Euclid's greatest common divisor; either argument may be
+      negative or zero, and the result is never negative }</code></pre>
+
+      <p>The author owns the signature, types, and prompt. The generated body is
+        saved under the module's <code>gen</code> folder and compiled as ordinary
+        silver. It is reused while the signature and request still match.</p>
+
+      <p>The feature suite exercises generated arithmetic, branches, loops,
+        string algorithms, instance methods, tests, image inspection, generated
+        image resources, and build-time file generation. The generated code
+        receives no alternate runtime or type privileges.</p>
+    </section>
+
+    <section id="verification">
+      <span class="kicker">Verification</span>
+      <h2>Tests are members of the module.</h2>
+      <p class="opening"><code>expect func</code> declares executable test code
+        beside the feature it checks. <code>silver --test</code> discovers those
+        functions through the module type graph and runs them in definition
+        order.</p>
+
+      <pre><code>expect func t_vector_math [] -&gt; bool
+    a: vec i32 [] [ 1, 2, 3 ]
+    b: a * 2
+    expect b[ 2 ] == 6, 'last value is {b[2]}'
+    return true</code></pre>
+
+      <p><code>expect</code> also works as a statement or expression inside
+        normal code. It may bind the checked value and attach a diagnostic.
+        <code>check</code> raises a catchable failure; <code>fault</code> stops
+        immediately. A test declared inside a class receives a new default
+        instance.</p>
+
+      <p>The main feature suite contains 275 executable tests covering the
+        language, imports, native interop, code generation, build-time output,
+        serialization, memory accounting, and ABI behavior. The page links to
+        that suite because it is the exact source behind the examples.</p>
+    </section>
+
+    <section id="surface">
+      <span class="kicker">Language surface</span>
+      <h2>Core syntax, in one place.</h2>
+      <p class="opening">Square brackets hold calls, conditions,
+        constructors, and index operations. Indentation forms statement blocks.
+        Braces hold uninterpreted token or text blocks.</p>
+
+      <dl class="dense">
+        <dt>Flow</dt>
+        <dd><code>if</code> / <code>el</code>, while loops, one-, two-, and
+          three-part for loops, do-while form, forward and reverse collection
+          iteration, numbered break and continue, and non-falling switch over
+          enums, integers, or strings.</dd>
+        <dt>Errors</dt>
+        <dd><code>try</code>, typed or untyped <code>catch</code>,
+          <code>finally</code>, and <code>throw</code>. Finally runs on normal
+          completion, caught failure, and rethrow.</dd>
+        <dt>Expressions</dt>
+        <dd>Arithmetic and bit operators, compound assignment, inclusive and
+          exclusive ranges, match lists, null coalescing, conditional values,
+          three-way comparison, source location values, and numeric math that
+          maps over vectors.</dd>
+        <dt>Text</dt>
+        <dd>Single-quoted interpolated strings, double-quoted C strings,
+          Unicode character literals, C-style numeric formatting, dedented
+          multiline string blocks, compact command blocks, and path operations.</dd>
+        <dt>Names</dt>
+        <dd>Unicode identifiers are accepted and normalized to NFC, so composed
+          and decomposed spellings resolve to the same symbol.</dd>
+        <dt>Conditional source</dt>
+        <dd>Platform and architecture names are boolean values.
+          <code>ifdef</code> and <code>ifndef</code> gate imports or statements,
+          with ordinary <code>el</code> branches.</dd>
+      </dl>
+
+      <p class="source-note">Start with <a href="https://github.com/ar-visions/silver/blob/master/features/features.ag">features/features.ag</a>. It is both a language tour and the executable specification for the behavior described here.</p>
+    </section>
+  </main>
+</div>
 
 <footer>
-  <div class="wrap">
-    <div class="row">
-      <div>silver, a native build language · MIT License · © 2017 Kalen Novis White</div>
-      <div class="row" style="gap:18px;">
-        <a href="https://github.com/ar-visions/silver">silver</a>
-        <a href="https://github.com/ar-visions/orbiter">orbiter</a>
-        <a href="https://github.com/ar-visions/hyperspace">hyperspace</a>
-      </div>
-    </div>
+  <div class="frame">
+    <span>silver · native build language · MIT License</span>
+    <span><a href="https://github.com/ar-visions/silver">repository</a> · <a href="https://github.com/ar-visions/silver/blob/master/features/features.ag">feature suite</a></span>
   </div>
 </footer>
-
-<dialog id="sheet-import" class="sheet">
-  <div class="sheet-in">
-    <button class="sheet-x" aria-label="Close">&times;</button>
-    <p class="eyebrow">import</p>
-    <h3>One keyword, every source.</h3>
-    <p><code>import</code> resolves a dependency, builds it from source and brings its types into
-      scope. There are a few forms, and every one of them builds from source. None of them downloads a
-      prebuilt binary.</p>
-
-    <h4>The forms</h4>
-    <div class="code"><pre><span class="k">import</span> img                          <span class="c"># local silver module</span>
-<span class="k">import</span> madler<span class="m">:</span>zlib<span class="m">/</span><span class="n">51b7f2a</span> <span class="t">&lt;zlib.h&gt;</span>   <span class="c"># owner:project/commit + C header</span>
-<span class="k">import</span> KhronosGroup<span class="m">:</span>Vulkan-Headers<span class="m">/</span><span class="n">29184b9</span>
-<span class="k">import</span> numpy <span class="k">as</span> np                  <span class="c"># namespaced</span>
-<span class="k">import</span> <span class="t">&lt;stdio.h&gt;</span>                    <span class="c"># a C header alone</span></pre></div>
-
-    <h4>From anywhere with <code>from</code></h4>
-    <p>By default an import resolves against your own git service and owner. <code>from</code> points
-      it at any other service or URL, and the rest of the line works the same.</p>
-    <div class="code"><pre><span class="k">import</span> mylib <span class="k">from</span> https<span class="m">:</span>//gitlab.com/team/mylib<span class="m">/</span><span class="n">a1b2c3d</span></pre></div>
-
-    <h4>It detects the build system</h4>
-    <p>silver clones the repo, works out how it builds (CMake, Meson, Cargo, GN or autotools), runs
-      that project's own tools and links the result. C and C++ headers are read through libclang and are
-      available at design time, macros included.</p>
-
-    <h4>silver + C + C++, one module</h4>
-    <p>A module's <code>.ag</code> source compiles alongside its <code>.c</code> and <code>.cc</code>
-      files. Declare a function in silver with no body and write it in C. Both use the Au object layout,
-      so there's no wrapper and nothing to convert.</p>
-    <div class="code"><pre><span class="k">class</span> <span class="t">image</span>
-    <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
-    <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>      <span class="c"># body lives in image.c</span></pre></div>
-
-    <h4>Imports take parameters</h4>
-    <p>Module-scope members are configuration inputs, set by the importer:</p>
-    <div class="code"><pre><span class="k">import</span> mymodule
-    debug<span class="m">:</span>   <span class="k">true</span>
-    version<span class="m">:</span> <span class="s">"1.0"</span></pre></div>
-  </div>
-</dialog>
-
-<dialog id="sheet-live" class="sheet">
-  <div class="sheet-in">
-    <button class="sheet-x" aria-label="Close">&times;</button>
-    <p class="eyebrow">live reload</p>
-    <h3>The watcher ships in the binary.</h3>
-    <p>Run a project in watch mode and silver watches its source. When you save, it recompiles only
-      the module that changed, loads the new code and carries on. The window and the Vulkan session stay
-      up.</p>
-    <div class="code"><pre><span class="m">$</span> silver orbiter <span class="k">--watch</span></pre></div>
-    <h4>What persists</h4>
-    <p>A built-in host keeps the long-lived state (the Vulkan context, caches, your app object)
-      through the swap. Only the app module's code is replaced, so a reload costs a frame instead of a
-      restart. Apps installed under <code>share</code> watch their own source the same way.</p>
-  </div>
-</dialog>
-
-<dialog id="sheet-debug" class="sheet">
-  <div class="sheet-in">
-    <button class="sheet-x" aria-label="Close">&times;</button>
-    <p class="eyebrow">debug · test · profile</p>
-    <h3>Instrumented by default.</h3>
-    <p>Debug is the default build. Every binary carries full LLDB information on every platform, from
-      one source tree: source maps, stepping, breakpoints and variable inspection.</p>
-    <h4>Tests live in the module</h4>
-    <p>Mark a function <code>expect func</code> and it's a test. It compiles into the module, so
-      there's no separate harness, and each run reports coverage and timings down to the nanosecond.
-      <code>silver --test app</code> runs every expect in the module and its imports, each in its
-      module's own initializer, and exits before the app starts. Arguments are built with their
-      defaults, so a test that takes a <code>vk_context</code> gets a real one, renders without a window
-      and reads its pixels back. A graphics app can pin the average color of one rendered frame: four
-      numbers that change when anything in the render path does.</p>
-    <div class="code"><pre><span class="k">expect func</span> <span class="f">math_ok</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">bool</span>
-    <span class="k">return</span> <span class="f">add</span> <span class="m">[</span> <span class="n">2</span>, <span class="n">2</span> <span class="m">]</span> <span class="m">==</span> <span class="n">4</span></pre></div>
-    <p>A release build runs the debug tests first and won't build if any fail. The release binary has
-      none of the test code in it.</p>
-  </div>
-</dialog>
-
-<dialog id="sheet-interop" class="sheet">
-  <div class="sheet-in">
-    <button class="sheet-x" aria-label="Close">&times;</button>
-    <p class="eyebrow">C / C++ interop</p>
-    <h3>One object model, no bindings.</h3>
-    <p>silver, C and C++ meet in Au, a C runtime with reference counting, reflection and single
-      inheritance. Every type in any of the three languages is one <code>Au_t</code> schema node with
-      one memory layout.</p>
-    <div class="code"><pre><span class="c"># image.ag: declare in silver</span>
-<span class="k">class</span> <span class="t">image</span>
-    <span class="k">public</span> uri<span class="m">:</span> <span class="t">path</span>
-    <span class="k">func</span> <span class="f">decode</span> <span class="m">[</span> <span class="m">]</span> <span class="m">-&gt;</span> <span class="t">none</span>
-
-<span class="c">// image.c: implement in C, full field access</span>
-<span class="t">none</span> <span class="f">image_decode</span>(<span class="t">image</span> self) <span class="m">{</span>
-    FILE* f <span class="m">=</span> fopen(self<span class="m">-&gt;</span>uri<span class="m">-&gt;</span>chars, <span class="s">"rb"</span>);
-<span class="m">}</span></pre></div>
-    <p>The schema generates the C struct and the silver type with the same layout, so a field is the
-      same field on both sides and nothing gets converted at the boundary.</p>
-  </div>
-</dialog>
-
-<script>
-  document.querySelectorAll('.more').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var d = document.getElementById(b.dataset.sheet);
-      if (d && d.showModal) d.showModal();
-    });
-  });
-  document.querySelectorAll('dialog.sheet').forEach(function (d) {
-    var x = d.querySelector('.sheet-x');
-    if (x) x.addEventListener('click', function () { d.close(); });
-    d.addEventListener('click', function (e) { if (e.target === d) d.close(); });
-  });
-</script>
 
 </body>
 </html>
